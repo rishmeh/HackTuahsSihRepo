@@ -1,0 +1,30 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Environment variables
+.env
+.env.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Models and large files
+*.onnx
+*.onnx.json
+
+# Logs
+*.log
+
+# pytest
+.pytest_cache/
+
+# OS generated files
+.DS_Store
+Thumbs.db
