@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-import config
+from vision import config
 from vision.detector import FaceDetector
 from vision.face_store import FaceStore
 from vision.pipeline import VisionPipeline

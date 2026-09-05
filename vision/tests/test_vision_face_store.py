@@ -1,10 +1,10 @@
 """
-tests/test_vision_face_store.py — Unit tests for the on-device face database.
+vision/tests/test_vision_face_store.py — Unit tests for the on-device face database.
 
 The store is the privacy boundary of the whole project: it must hold face
 *embeddings* and never face *images*. These tests pin that guarantee down.
 
-Run with: pytest tests/test_vision_face_store.py -v
+Run with: pytest vision/tests/test_vision_face_store.py -v
 """
 
 import numpy as np

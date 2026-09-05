@@ -13,13 +13,16 @@ import numpy as np
 import pytest
 from skimage import data
 
+from vision import config
+
 # OpenCV 5's new graph engine logs a harmless "Targets are not supported"
 # warning on every model load. Silence it so test output stays clean.
 cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
 
-MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
-DETECTOR_MODEL = MODELS_DIR / "face_detection_yunet_2023mar.onnx"
-RECOGNIZER_MODEL = MODELS_DIR / "face_recognition_sface_2021dec.onnx"
+# Taken from the package config rather than rebuilt here, so tests and the
+# shipping code can never disagree about where the weights live.
+DETECTOR_MODEL = config.YUNET_MODEL_PATH
+RECOGNIZER_MODEL = config.SFACE_MODEL_PATH
 
 _models_present = DETECTOR_MODEL.exists() and RECOGNIZER_MODEL.exists()
 requires_models = pytest.mark.skipif(

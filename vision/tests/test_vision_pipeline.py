@@ -1,17 +1,17 @@
 """
-tests/test_vision_pipeline.py — End-to-end tests for the vision pipeline.
+vision/tests/test_vision_pipeline.py — End-to-end tests for the vision pipeline.
 
 Real ONNX models, real photographs, a real SQLite file. Only the camera is
 absent. This is the test that answers "would the demo work?".
 
-Run with: pytest tests/test_vision_pipeline.py -v
+Run with: pytest vision/tests/test_vision_pipeline.py -v
 """
 
 import cv2
 import numpy as np
 import pytest
 
-from tests.conftest import DETECTOR_MODEL, RECOGNIZER_MODEL, requires_models
+from vision.tests.conftest import DETECTOR_MODEL, RECOGNIZER_MODEL, requires_models
 from vision.detector import FaceDetector
 from vision.face_store import FaceStore
 from vision.pipeline import VisionPipeline

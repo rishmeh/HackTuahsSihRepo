@@ -1,5 +1,5 @@
 """
-tests/test_vision_camera.py — Tests for the camera front-end.
+vision/tests/test_vision_camera.py — Tests for the camera front-end.
 
 No real camera is used: a fake capture object is injected, which lets us test
 the awkward parts — backend choice, warm-up, and transient read failures —
@@ -12,7 +12,7 @@ returned no frame". Measured on this machine:
     CAP_MSMF   ->   1 frame          (stalls)
     CAP_ANY    ->   1 frame          (stalls; MSMF is the Windows default)
 
-Run with: pytest tests/test_vision_camera.py -v
+Run with: pytest vision/tests/test_vision_camera.py -v
 """
 
 import cv2

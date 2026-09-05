@@ -6,11 +6,24 @@ venv/
 __pycache__/
 *.py[cod]
 
-# Pretrained model weights (fetched with: python -m vision.download_models)
+# Editable-install build artefacts (pip install -e .)
+*.egg-info/
+build/
+dist/
+
+# Pretrained model weights (fetch with: python -m vision.download_models)
 *.onnx
+vision/weights/
 
 # Enrolled face embeddings — personal data, never commit
 *.db
+vision/data/
+
+# Environment variables
+.env
+
+# pytest
+.pytest_cache/
 
 # OS generated files
 .DS_Store

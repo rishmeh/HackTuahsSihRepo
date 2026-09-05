@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tabletot-vision"
+version = "0.1.0"
+description = "On-device face detection and recognition for the Table Tot desk companion robot"
+requires-python = ">=3.10"
+
+# Kept minimal on purpose: this package must install on a Raspberry Pi without
+# dragging in the chat stack (torch, transformers, spaCy). The full pin list for
+# the ml service lives in ml/requirements.txt.
+dependencies = [
+    "opencv-contrib-python>=4.8",
+    "numpy>=1.24",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# Needed only when serving the HTTP endpoints (vision/routes.py)
+api = ["fastapi>=0.100", "python-multipart>=0.0.6"]
+test = ["pytest>=7.0", "scikit-image>=0.20", "httpx>=0.24"]
+
+[project.scripts]
+# So "tabletot-vision watch" works from anywhere, without -m or a cd.
+tabletot-vision = "vision.camera:main"
+
+[tool.setuptools]
+# Explicit, because auto-discovery would otherwise try to package ml/ as well.
+packages = ["vision"]
+
+[tool.pytest.ini_options]
+# Lets tests run from the repository root or from inside vision/.
+testpaths = ["vision/tests", "ml/tests"]

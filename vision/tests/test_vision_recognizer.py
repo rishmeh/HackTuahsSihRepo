@@ -1,17 +1,17 @@
 """
-tests/test_vision_recognizer.py — Tests for SFace face recognition.
+vision/tests/test_vision_recognizer.py — Tests for SFace face recognition.
 
 These use photographs of two different real people, so the same-person and
 different-person claims are measured, not assumed.
 
-Run with: pytest tests/test_vision_recognizer.py -v
+Run with: pytest vision/tests/test_vision_recognizer.py -v
 """
 
 import cv2
 import numpy as np
 import pytest
 
-from tests.conftest import DETECTOR_MODEL, RECOGNIZER_MODEL, requires_models
+from vision.tests.conftest import DETECTOR_MODEL, RECOGNIZER_MODEL, requires_models
 from vision.detector import FaceDetector
 from vision.matching import cosine_similarity
 from vision.models import FaceBox

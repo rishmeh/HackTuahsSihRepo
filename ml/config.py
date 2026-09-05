@@ -73,51 +73,7 @@ FALLBACK_RESPONSE: str = (
 )
 
 # ---------------------------------------------------------------------------
-# Vision — face detection (YuNet) and recognition (SFace)
+# Vision — face detection and recognition
 # ---------------------------------------------------------------------------
-# Both models are pretrained and live on-device. Fetch them once with:
-#   python -m vision.download_models
-VISION_MODELS_DIR: str = os.getenv(
-    "VISION_MODELS_DIR", os.path.join(os.path.dirname(__file__), "models")
-)
-YUNET_MODEL_PATH: str = os.getenv(
-    "YUNET_MODEL_PATH",
-    os.path.join(VISION_MODELS_DIR, "face_detection_yunet_2023mar.onnx"),
-)
-SFACE_MODEL_PATH: str = os.getenv(
-    "SFACE_MODEL_PATH",
-    os.path.join(VISION_MODELS_DIR, "face_recognition_sface_2021dec.onnx"),
-)
-
-# Local database of enrolled face embeddings. Never contains images.
-FACE_DB_PATH: str = os.getenv(
-    "FACE_DB_PATH", os.path.join(os.path.dirname(__file__), "data", "faces.db")
-)
-
-# Detector confidence required to call something a face.
-#
-# Calibrated against measurement: a moving face is reported at a median of 0.833
-# and dips well below, while the worst false positive on a faceless image scored
-# 0.585. 0.70 sits between them. Raising this towards 0.9 makes the robot lose
-# the student whenever they move; lowering it past ~0.59 invents faces.
-FACE_DETECT_THRESHOLD: float = float(os.getenv("FACE_DETECT_THRESHOLD", "0.70"))
-
-# Cosine similarity required to accept an identity. OpenCV's published figure
-# is 0.363; we run stricter because a false accept loads the wrong student's
-# persona and progress, while a false reject only costs a spoken confirmation.
-FACE_MATCH_THRESHOLD: float = float(os.getenv("FACE_MATCH_THRESHOLD", "0.45"))
-
-# Consecutive agreeing frames before announcing that a student has arrived.
-FACE_CONFIRM_FRAMES: int = int(os.getenv("FACE_CONFIRM_FRAMES", "3"))
-
-# Consecutive faceless frames before announcing that they have left. At ~5 fps
-# this is about a second, so glancing down at a book is not a departure.
-FACE_FORGET_FRAMES: int = int(os.getenv("FACE_FORGET_FRAMES", "5"))
-
-# Camera index for cv2.VideoCapture on a laptop. On the Pi, Picamera2 is used
-# instead and this is ignored.
-CAMERA_INDEX: int = int(os.getenv("CAMERA_INDEX", "0"))
-
-# Frames per second the vision loop targets. Recognition is the expensive
-# half; keeping this low leaves CPU for speech and the language model.
-VISION_FPS: float = float(os.getenv("VISION_FPS", "5"))
+# Face settings live in the vision package's own config (vision/config.py),
+# which sits outside ml/ so the package can run standalone on the robot.

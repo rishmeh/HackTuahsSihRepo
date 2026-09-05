@@ -12,7 +12,7 @@ detector — SFace uses them to rotate and scale the face into a canonical
 that alignment step.
 
 Two details of the OpenCV API that are easy to get wrong, and are pinned by
-tests in tests/test_vision_detector.py:
+tests in vision/tests/test_vision_detector.py:
 
   1. ``detect`` returns None, not an empty array, when there are no faces.
   2. The detector carries an input size that must match the frame. Change

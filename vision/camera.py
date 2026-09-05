@@ -28,7 +28,7 @@ from typing import Iterator, Protocol
 import cv2
 import numpy as np
 
-import config
+from vision import config
 from vision.enrollment import TimedSampler
 from vision.factory import build_pipeline
 from vision.pipeline import VisionPipeline

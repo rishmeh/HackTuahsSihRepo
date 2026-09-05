@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Annotated, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -30,7 +31,14 @@ from flashcards.generator import generate_and_format_deck
 from flashcards.models import FlashcardDeck, FlashcardRequest
 from quiz.generator import generate_and_format_quiz
 from quiz.models import Quiz, QuizRequest
-from vision.routes import router as vision_router
+
+# The face package lives at the repository root, outside ml/, so it can also be
+# used standalone by the robot's camera loop. The server is normally started
+# from inside ml/ ("uvicorn main:app"), which puts ml/ on sys.path but not its
+# parent — so add the repository root before importing it.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from vision.routes import router as vision_router  # noqa: E402
 
 import config
 

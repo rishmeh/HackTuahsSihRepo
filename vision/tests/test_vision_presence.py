@@ -1,11 +1,11 @@
 """
-tests/test_vision_presence.py — Unit tests for presence smoothing.
+vision/tests/test_vision_presence.py — Unit tests for presence smoothing.
 
 Per-frame recognition is noisy: a blink, a turn of the head or a moment of
 motion blur flips a single frame to the wrong answer. The tracker turns that
 noisy per-frame stream into stable "student arrived" / "student left" events.
 
-Run with: pytest tests/test_vision_presence.py -v
+Run with: pytest vision/tests/test_vision_presence.py -v
 """
 
 import pytest

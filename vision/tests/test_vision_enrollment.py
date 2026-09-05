@@ -1,5 +1,5 @@
 """
-tests/test_vision_enrollment.py — Tests for automatic enrolment sampling.
+vision/tests/test_vision_enrollment.py — Tests for automatic enrolment sampling.
 
 Enrolment used to require pressing SPACE in the OpenCV preview window. That
 turned out to be unreliable — the window rarely holds keyboard focus on
@@ -11,7 +11,7 @@ The sampler replaces it: it decides when to capture based on elapsed time and
 whether a face is currently visible. Time is injected rather than read from
 the clock, so the whole schedule is testable instantly and deterministically.
 
-Run with: pytest tests/test_vision_enrollment.py -v
+Run with: pytest vision/tests/test_vision_enrollment.py -v
 """
 
 import pytest

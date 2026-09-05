@@ -63,6 +63,6 @@ def download(models_dir: Path) -> None:
 
 
 if __name__ == "__main__":
-    target_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent.parent / "models"
+    target_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent / "weights"
     download(target_dir)
     print(f"\nModels ready in {target_dir.resolve()}")

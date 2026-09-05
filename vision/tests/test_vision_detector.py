@@ -1,13 +1,13 @@
 """
-tests/test_vision_detector.py — Tests for YuNet face detection.
+vision/tests/test_vision_detector.py — Tests for YuNet face detection.
 
-Run with: pytest tests/test_vision_detector.py -v
+Run with: pytest vision/tests/test_vision_detector.py -v
 """
 
 import numpy as np
 import pytest
 
-from tests.conftest import DETECTOR_MODEL, requires_models
+from vision.tests.conftest import DETECTOR_MODEL, requires_models
 from vision.detector import DEFAULT_DETECT_THRESHOLD, FaceDetector
 
 pytestmark = requires_models
@@ -148,6 +148,6 @@ class TestThresholdCalibration:
 
     def test_config_default_matches_the_detector_default(self):
         """The two must not drift apart; config.py is what actually ships."""
-        import config
+        from vision import config
 
         assert config.FACE_DETECT_THRESHOLD == DEFAULT_DETECT_THRESHOLD

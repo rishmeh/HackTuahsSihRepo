@@ -1,11 +1,11 @@
 """
-tests/test_vision_routes.py — Tests for the face HTTP endpoints.
+vision/tests/test_vision_routes.py — Tests for the face HTTP endpoints.
 
 The router is mounted on a throwaway FastAPI app with a pipeline pointed at a
 temporary database, so these exercise the real models and real request parsing
 without touching the developer's enrolled faces.
 
-Run with: pytest tests/test_vision_routes.py -v
+Run with: pytest vision/tests/test_vision_routes.py -v
 """
 
 import cv2
@@ -14,7 +14,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tests.conftest import DETECTOR_MODEL, RECOGNIZER_MODEL, requires_models
+from vision.tests.conftest import DETECTOR_MODEL, RECOGNIZER_MODEL, requires_models
 from vision.detector import FaceDetector
 from vision.face_store import FaceStore
 from vision.pipeline import VisionPipeline

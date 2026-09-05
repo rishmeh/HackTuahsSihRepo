@@ -1,0 +1,21 @@
+# Face detection and recognition — runtime dependencies.
+#
+# Deliberately small: this package must be installable on a Raspberry Pi
+# without pulling in the chat stack (torch, transformers, spaCy and friends).
+#
+#   pip install -r vision/requirements.txt
+#   python -m vision.download_models
+
+opencv-contrib-python>=4.8    # cv2.FaceDetectorYN + cv2.FaceRecognizerSF
+numpy>=1.24
+pydantic>=2.0                 # API request/response schemas
+python-dotenv>=1.0            # optional: reads .env for config overrides
+
+# Only needed if you mount the HTTP endpoints (vision/routes.py)
+fastapi>=0.100
+python-multipart>=0.0.6       # multipart/form-data image uploads
+
+# Tests
+pytest>=7.0
+scikit-image>=0.20            # sample photographs of two real people
+httpx>=0.24                   # FastAPI TestClient

@@ -1,10 +1,10 @@
 """
-tests/test_vision_matching.py — Unit tests for face embedding matching.
+vision/tests/test_vision_matching.py — Unit tests for face embedding matching.
 
 These run without a camera or an ONNX model: matching is pure vector maths,
 so we feed it synthetic embeddings.
 
-Run with: pytest tests/test_vision_matching.py -v
+Run with: pytest vision/tests/test_vision_matching.py -v
 """
 
 import numpy as np
