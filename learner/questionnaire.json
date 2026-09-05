@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "title": "The Mysterious World",
+  "intro": "Tot unrolls a giant map of a mysterious world. There are forests, towers, villages, and a big question mark in the middle.",
+  "dimensions": {
+    "preferences": {
+      "orientation": ["overview", "explore", "social", "goal"],
+      "skill_intro": ["observe", "trial", "steps", "guided"],
+      "explanation_format": ["narrative", "structural", "concise", "socratic"],
+      "persona_mode": ["teacher", "peer", "socratic", "independent"],
+      "motivation": ["curiosity", "utility", "gap", "mastery"]
+    },
+    "traits": [
+      "help_seeking",
+      "frustration_tolerance",
+      "failure_sensitivity",
+      "confidence_expression",
+      "social_orientation"
+    ],
+    "constraints": ["brevity", "explain_why", "low_stakes", "playful"]
+  },
+  "corroboration": [
+    {"dimension": "explanation_format", "scenes": [4, 7]},
+    {"dimension": "orientation", "scenes": [1, 3]},
+    {"dimension": "failure_sensitivity", "scenes": [5, 6]}
+  ],
+  "scenes": [
+    {
+      "id": 1,
+      "title": "The Map Room",
+      "text": "Tot unrolls a giant map of a mysterious world. There are forests, towers, villages, and a big question mark in the middle.",
+      "question": "Where do you want to go first?",
+      "measures": "orientation style - how the student enters new material",
+      "options": [
+        {"key": "A", "text": "The tall tower - I want to see everything from the top before deciding",
+         "weights": {"orientation": "overview"}},
+        {"key": "B", "text": "The forest - it looks interesting and a little mysterious",
+         "weights": {"orientation": "explore"}},
+        {"key": "C", "text": "The village - there might be people there who can tell me what's going on",
+         "weights": {"orientation": "social", "social_orientation": 0.8}},
+        {"key": "D", "text": "Straight to the question mark - that's obviously the most important place",
+         "weights": {"orientation": "goal"}}
+      ]
+    },
+    {
+      "id": 2,
+      "title": "The Riddle Stone",
+      "text": "A large stone blocks the path. Words appear on it: \"I have cities but no houses, forests but no trees, and water but no fish. What am I?\" Tot says you can answer, skip, or ask for a hint.",
+      "question": "What do you do?",
+      "measures": "help-seeking threshold and frustration tolerance when stuck",
+      "options": [
+        {"key": "A", "text": "Think hard and try to answer myself",
+         "weights": {"help_seeking": 0.1, "frustration_tolerance": 0.8}},
+        {"key": "B", "text": "Ask Tot for a small hint first",
+         "weights": {"help_seeking": 0.5, "frustration_tolerance": 0.6}},
+        {"key": "C", "text": "Ask Tot to just tell me the answer so we can move on",
+         "weights": {"help_seeking": 0.9, "frustration_tolerance": 0.2}},
+        {"key": "D", "text": "Sit with it for a while - the answer will come",
+         "weights": {"help_seeking": 0.2, "frustration_tolerance": 0.95}}
+      ]
+    },
+    {
+      "id": 3,
+      "title": "The Lantern",
+      "text": "The villagers want to teach you how they make their famous glowing lanterns.",
+      "question": "How do you want to learn?",
+      "measures": "learning sequence preference - how new skills should be introduced",
+      "options": [
+        {"key": "A", "text": "Watch someone make one from start to finish first",
+         "weights": {"skill_intro": "observe", "orientation": "overview"}},
+        {"key": "B", "text": "Just hand me the materials and I'll figure it out",
+         "weights": {"skill_intro": "trial", "orientation": "explore", "help_seeking": 0.15}},
+        {"key": "C", "text": "Tell me the steps, then I'll follow them one by one",
+         "weights": {"skill_intro": "steps", "orientation": "goal"}},
+        {"key": "D", "text": "Make one together with someone guiding me as I go",
+         "weights": {"skill_intro": "guided", "orientation": "social", "social_orientation": 0.7}}
+      ]
+    },
+    {
+      "id": 4,
+      "title": "The Storyteller",
+      "text": "An old woman offers to tell you about the mysterious world. She can tell it three ways.",
+      "question": "Which do you pick?",
+      "measures": "preferred explanation format - how Tot should deliver content",
+      "options": [
+        {"key": "A", "text": "As a story with characters and drama",
+         "weights": {"explanation_format": "narrative"}},
+        {"key": "B", "text": "As a map with explanations for each place",
+         "weights": {"explanation_format": "structural"}},
+        {"key": "C", "text": "As a list of the most important facts",
+         "weights": {"explanation_format": "concise"}},
+        {"key": "D", "text": "Just answer my questions as I ask them",
+         "weights": {"explanation_format": "socratic"}}
+      ]
+    },
+    {
+      "id": 5,
+      "title": "The Wizard's Riddle",
+      "text": "The wizard asks the group a riddle and you think you know the answer.",
+      "question": "What do you do?",
+      "measures": "confidence expression and risk tolerance around being wrong publicly",
+      "options": [
+        {"key": "A", "text": "Shout out my answer right away",
+         "weights": {"confidence_expression": 0.95, "failure_sensitivity": 0.1}},
+        {"key": "B", "text": "Raise my hand to share it",
+         "weights": {"confidence_expression": 0.7, "failure_sensitivity": 0.3}},
+        {"key": "C", "text": "Wait to see if anyone else answers first",
+         "weights": {"confidence_expression": 0.35, "failure_sensitivity": 0.6, "social_orientation": 0.6}},
+        {"key": "D", "text": "Stay quiet and keep it to myself",
+         "weights": {"confidence_expression": 0.15, "failure_sensitivity": 0.7}}
+      ]
+    },
+    {
+      "id": 6,
+      "title": "The Wrong Answer",
+      "text": "Someone answers confidently - and gets it completely wrong. The wizard gently corrects them.",
+      "question": "How do you feel watching this?",
+      "measures": "relationship to failure and mistakes - how Tot should handle wrong answers",
+      "options": [
+        {"key": "A", "text": "Relieved it wasn't me",
+         "weights": {"failure_sensitivity": 0.9}},
+        {"key": "B", "text": "Curious why they thought that",
+         "weights": {"failure_sensitivity": 0.2}},
+        {"key": "C", "text": "Feel a little bad for them",
+         "weights": {"failure_sensitivity": 0.5, "social_orientation": 0.7}},
+        {"key": "D", "text": "Glad - mistakes help everyone learn",
+         "weights": {"failure_sensitivity": 0.1}}
+      ]
+    },
+    {
+      "id": 7,
+      "title": "The Library",
+      "text": "The wizard's library has thousands of books. He says you can take one to help on your journey.",
+      "question": "Which do you pick?",
+      "measures": "resource preference - what kind of content they naturally reach for",
+      "options": [
+        {"key": "A", "text": "A book of maps and diagrams of the world",
+         "weights": {"explanation_format": "structural"}},
+        {"key": "B", "text": "A book of stories about travellers who came before",
+         "weights": {"explanation_format": "narrative"}},
+        {"key": "C", "text": "A book of answers to the most common questions",
+         "weights": {"explanation_format": "concise"}},
+        {"key": "D", "text": "A book that asks you questions and fills in based on your answers",
+         "weights": {"explanation_format": "socratic"}}
+      ]
+    },
+    {
+      "id": 8,
+      "title": "The Companion",
+      "text": "Tot asks if you'd like a companion for the rest of the journey.",
+      "question": "What kind of companion do you want?",
+      "measures": "desired relationship with Tot - directly shapes persona and interaction style",
+      "options": [
+        {"key": "A", "text": "Someone who knows the way and can guide me",
+         "weights": {"persona_mode": "teacher"}},
+        {"key": "B", "text": "Someone to figure things out with together",
+         "weights": {"persona_mode": "peer", "social_orientation": 0.8}},
+        {"key": "C", "text": "Someone who asks me questions to help me think",
+         "weights": {"persona_mode": "socratic"}},
+        {"key": "D", "text": "I'd rather go alone - I like my own pace",
+         "weights": {"persona_mode": "independent", "help_seeking": 0.1}}
+      ]
+    },
+    {
+      "id": 9,
+      "title": "The Question Mark",
+      "text": "You finally reach the question mark. Behind the door is a room full of things to learn. You can only pick one to start with today.",
+      "question": "Which do you pick?",
+      "measures": "learning motivation - why they study, which determines how Tot frames tasks",
+      "options": [
+        {"key": "A", "text": "Something I've always been curious about",
+         "weights": {"motivation": "curiosity"}},
+        {"key": "B", "text": "Something that will actually be useful to me soon",
+         "weights": {"motivation": "utility"}},
+        {"key": "C", "text": "Something I've been struggling with and want to fix",
+         "weights": {"motivation": "gap"}},
+        {"key": "D", "text": "Something I already know a little about and want to go deeper",
+         "weights": {"motivation": "mastery"}}
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Tot Asks",
+      "text": "Before you go in, Tot turns to you and asks: \"What should I never do when I'm helping you?\"",
+      "question": "What should Tot never do?",
+      "measures": "communication aversions - hard constraints for every future interaction",
+      "options": [
+        {"key": "A", "text": "Talk too much - just get to the point",
+         "weights": {"constraint": "brevity"}},
+        {"key": "B", "text": "Skip the explanation - I need to understand why",
+         "weights": {"constraint": "explain_why"}},
+        {"key": "C", "text": "Make it feel like a test - keep it relaxed",
+         "weights": {"constraint": "low_stakes", "failure_sensitivity": 0.7}},
+        {"key": "D", "text": "Be too serious - make it fun",
+         "weights": {"constraint": "playful"}}
+      ]
+    }
+  ]
+}

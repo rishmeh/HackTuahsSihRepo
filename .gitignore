@@ -18,6 +18,7 @@ vision/weights/
 # Enrolled face embeddings — personal data, never commit
 *.db
 vision/data/
+learner/data/
 
 # Environment variables
 .env

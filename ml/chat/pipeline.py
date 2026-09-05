@@ -34,6 +34,7 @@ NOTE: session_store.append_turn is called only after a *successful* response
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 import config
 from chat.complexity_judge import evaluate_pre_slm, evaluate_post_slm
@@ -42,9 +43,65 @@ from chat.models import ChatRequest, ChatResponse, EscalationReason
 from chat.safety_filter import apply_safety_filter
 from chat.sanitizer import sanitize
 from chat.session_store import append_turn, history_as_messages
-from chat.slm_client import call_slm
+from chat.slm_client import BASE_SYSTEM_PROMPT, call_slm
+from learner.models import TotSettings
+from learner.policy import default_settings, derive_settings
+from learner.profile_store import ProfileStore
+from persona.decorate import decorate_answer
+from persona.phrases import PhraseBook, Situation
+from persona.prompt import build_persona_block, compose_system_prompt
 
 logger = logging.getLogger(__name__)
+
+# One phrase book for the process, so the no-repeat memory spans requests.
+_PHRASES = PhraseBook()
+
+
+def _learner_store() -> ProfileStore:
+    """Where student profiles live. A function so tests can swap it."""
+    from learner import config as learner_config
+
+    return ProfileStore(learner_config.LEARNER_DB_PATH)
+
+
+@dataclass(frozen=True)
+class _Persona:
+    """Everything the pipeline needs to speak as Tot to one student."""
+
+    system_prompt: str
+    settings: TotSettings
+    situation: Situation
+
+    def apply(self, answer: str) -> str:
+        """Wrap a model answer in Tot's voice. Runs BEFORE the safety filter."""
+        return decorate_answer(answer, self.settings, self.situation, _PHRASES)
+
+
+def _persona_for(request: ChatRequest) -> _Persona:
+    """
+    Resolve the persona for this request.
+
+    An enrolled student gets settings derived from their questionnaire; anyone
+    else gets the safe default (sarcasm off, warm, normal length). Either way
+    the persona block is composed onto the base prompt, which keeps the
+    STRICT RULES and JSON schema intact — compose_system_prompt refuses to
+    proceed otherwise.
+    """
+    settings = None
+    if request.student_id:
+        stored = _learner_store().get(request.student_id)
+        if stored is not None:
+            settings = derive_settings(stored.profile)
+        else:
+            logger.info("No learner profile for %r; using default persona", request.student_id)
+    if settings is None:
+        settings = default_settings(age=request.student.age)
+
+    return _Persona(
+        system_prompt=compose_system_prompt(BASE_SYSTEM_PROMPT, build_persona_block(settings)),
+        settings=settings,
+        situation=Situation(request.situation),
+    )
 
 
 async def run_chat_pipeline(request: ChatRequest) -> ChatResponse:
@@ -65,6 +122,9 @@ async def run_chat_pipeline(request: ChatRequest) -> ChatResponse:
             request.session_id,
             len(history),
         )
+
+    # Who Tot is for this student — prompt directives in, phrase pools out.
+    persona = _persona_for(request)
 
     # ------------------------------------------------------------------
     # Step 2: Sanitize the raw query — remove PII before any LLM sees it
@@ -87,7 +147,10 @@ async def run_chat_pipeline(request: ChatRequest) -> ChatResponse:
         # ------------------------------------------------------------------
         # Step 4: Call local SLM — fast path (think=False)
         # ------------------------------------------------------------------
-        slm_response = await call_slm(sanitized_query, request.student, history, think=False)
+        slm_response = await call_slm(
+            sanitized_query, request.student, history,
+            think=False, system_prompt=persona.system_prompt,
+        )
 
         if slm_response is None:
             logger.error("SLM returned None. Using fallback response.")
@@ -109,9 +172,9 @@ async def run_chat_pipeline(request: ChatRequest) -> ChatResponse:
                 escalation_reason = post_slm_reason
 
     if not force_escalation:
-        # SLM answered confidently — run through safety filter
+        # SLM answered confidently — add Tot's voice, then run the safety filter
         assert slm_response is not None
-        filter_result = apply_safety_filter(slm_response.answer)
+        filter_result = apply_safety_filter(persona.apply(slm_response.answer))
         if filter_result.is_safe:
             if request.session_id:
                 append_turn(request.session_id, sanitized_query, filter_result.text)
@@ -146,11 +209,11 @@ async def run_chat_pipeline(request: ChatRequest) -> ChatResponse:
 
     if config.ESCALATION_MODE == "model_thinking":
         return await _escalate_via_thinking(
-            sanitized_query, request, history, escalation_reason, slm_response
+            sanitized_query, request, history, escalation_reason, slm_response, persona
         )
     else:
         return await _escalate_via_openrouter(
-            sanitized_query, request, history, escalation_reason, slm_response
+            sanitized_query, request, history, escalation_reason, slm_response, persona
         )
 
 
@@ -160,10 +223,12 @@ async def _escalate_via_thinking(
     history: list[dict[str, str]],
     escalation_reason: EscalationReason,
     slm_response,
+    persona: _Persona,
 ) -> ChatResponse:
     """Retry the local SLM with think=True for a higher-quality answer."""
     thinking_response = await call_slm(
-        sanitized_query, request.student, history, think=True
+        sanitized_query, request.student, history,
+        think=True, system_prompt=persona.system_prompt,
     )
 
     if thinking_response is None:
@@ -182,7 +247,7 @@ async def _escalate_via_thinking(
             session_id=request.session_id,
         )
 
-    filter_result = apply_safety_filter(thinking_response.answer)
+    filter_result = apply_safety_filter(persona.apply(thinking_response.answer))
     if filter_result.is_safe:
         if request.session_id:
             append_turn(request.session_id, sanitized_query, filter_result.text)
@@ -212,6 +277,7 @@ async def _escalate_via_openrouter(
     history: list[dict[str, str]],
     escalation_reason: EscalationReason,
     slm_response,
+    persona: _Persona,
 ) -> ChatResponse:
     """Forward to OpenRouter — sends only sanitized query + sanitized history (no PII)."""
     openrouter_answer = await call_openrouter(sanitized_query, history)
@@ -231,7 +297,7 @@ async def _escalate_via_openrouter(
             session_id=request.session_id,
         )
 
-    filter_result = apply_safety_filter(openrouter_answer)
+    filter_result = apply_safety_filter(persona.apply(openrouter_answer))
     if filter_result.is_safe:
         if request.session_id:
             append_turn(request.session_id, sanitized_query, filter_result.text)

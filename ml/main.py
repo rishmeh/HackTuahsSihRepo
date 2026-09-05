@@ -38,6 +38,7 @@ from quiz.models import Quiz, QuizRequest
 # parent — so add the repository root before importing it.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from learner.routes import router as learner_router  # noqa: E402
 from vision.routes import router as vision_router  # noqa: E402
 
 import config
@@ -68,6 +69,10 @@ app = FastAPI(
 # Face detection and recognition (YuNet + SFace). The models load lazily on the
 # first request, so the server still starts if they have not been downloaded yet.
 app.include_router(vision_router)
+
+# Onboarding questionnaire → learner profile → what Tot should do for this
+# student. The student app fetches the questionnaire and posts answers here.
+app.include_router(learner_router)
 
 
 # ---------------------------------------------------------------------------

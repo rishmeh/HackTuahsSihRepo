@@ -188,6 +188,30 @@ API — `main.py` mounts `vision.routes`.
 
 See [../vision/README.md](../vision/README.md).
 
+---
+
+## Learner Profiles (onboarding questionnaire)
+
+The 10-scene onboarding questionnaire, its scoring, and the mapping from a
+student's profile to how Tot should behave live in the **`learner/` package
+at the repository root**. Its endpoints (`/learner/*`) are served by this API.
+
+See [../learner/README.md](../learner/README.md).
+
+---
+
+## Persona (how Tot talks)
+
+Tot's personality lives in the **`persona/` package at the repository root**.
+The chat pipeline composes each student's persona onto the SLM system prompt
+and wraps answers in code-owned phrase pools; `voice_agent.py` uses the same
+pools for its spoken filler lines and takes its Piper pace from the same
+settings. `ChatRequest` accepts two optional fields for this: `student_id`
+(enrolled student → their persona; otherwise a safe default) and `situation`
+(`question | correct_answer | wrong_answer | struggling | repeated_question | idle | greeting`).
+
+See [../persona/README.md](../persona/README.md).
+
 > Note: "vision" is used for two unrelated things in this repo.
 > `ml/chat/vision_client.py` and `/chat/vision` mean *multimodal LLM*
 > (asking questions about an image). The `vision/` package means

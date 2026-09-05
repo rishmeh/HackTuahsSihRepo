@@ -11,7 +11,6 @@ Uses:
 import os
 import sys
 import queue
-import random
 import urllib.request
 import warnings
 import numpy as np
@@ -35,6 +34,50 @@ except ImportError as e:
     print(f"Missing dependency: {e}")
     print("Please install requirements using: pip install -r requirements.txt")
     sys.exit(1)
+
+# ---------------------------------------------------------
+# 0. Persona — Tot's spoken filler lines and voice pace.
+#    The voice agent does not yet know which student is at the desk, so it
+#    uses the safe default persona (sarcasm off). The backend decorates the
+#    actual answers; these lines cover the moments before an answer exists.
+# ---------------------------------------------------------
+from learner.policy import default_settings
+from persona.phrases import PhraseBook, Situation
+from persona.voice import voice_params
+
+_SETTINGS = default_settings(age=10)
+_PHRASES = PhraseBook()
+_VOICE = voice_params(_SETTINGS)
+
+
+def _say(kind: str, situation: Situation) -> str:
+    return _PHRASES.pick(
+        kind,
+        arm=_SETTINGS.encouragement_arm,
+        situation=situation,
+        sarcasm_allowed=_SETTINGS.sarcasm_allowed,
+    )
+
+
+def _synthesis_config():
+    """Piper's SynthesisConfig from the persona's pace, if this Piper has one."""
+    try:
+        from piper import SynthesisConfig
+    except ImportError:
+        return None
+    kw = _VOICE.synthesis_kwargs()
+    try:
+        return SynthesisConfig(
+            length_scale=kw["length_scale"],
+            noise_scale=kw["noise_scale"],
+            noise_w_scale=kw["noise_w"],
+        )
+    except TypeError:
+        # Older SynthesisConfig without the noise fields.
+        return SynthesisConfig(length_scale=kw["length_scale"])
+
+
+_SYN_CONFIG = _synthesis_config()
 
 # ---------------------------------------------------------
 # 1. Check and download Piper TTS model
@@ -92,8 +135,12 @@ def audio_callback(indata, frames, time, status):
 # ---------------------------------------------------------
 def speak_text(text: str):
     print(f"Agent: {text}")
-    # Synthesize returns an iterator of AudioChunk
-    audio_stream = tts_voice.synthesize(text)
+    # Synthesize returns an iterator of AudioChunk. Pace comes from the persona.
+    audio_stream = (
+        tts_voice.synthesize(text, syn_config=_SYN_CONFIG)
+        if _SYN_CONFIG is not None
+        else tts_voice.synthesize(text)
+    )
     
     audio_bytes = b"".join(chunk.audio_int16_bytes for chunk in audio_stream)
     if not audio_bytes:
@@ -106,15 +153,9 @@ def speak_text(text: str):
     sd.wait()
 
 # ---------------------------------------------------------
-# 6. Filler phrases — spoken while the backend is processing
+# 6. Filler lines while the backend is processing come from the persona's
+#    "thinking" pool — see _say() above.
 # ---------------------------------------------------------
-FILLER_PHRASES = [
-    "Hmm, let me think about that.",
-    "One moment, I'm working on it.",
-    "Let me figure that out for you.",
-    "Good question! Give me a second.",
-    "Hmm, interesting. Let me check.",
-]
 
 # ---------------------------------------------------------
 # 7. Main Loop
@@ -148,7 +189,7 @@ def main():
                 
                 if confidence > 0.5:
                     print("\n[Wakeword Detected! Listening...]")
-                    speak_text("I am listening.")
+                    speak_text(_say("listening", Situation.LISTENING))
                     
                     state = "RECORDING"
                     recorded_frames = []
@@ -192,8 +233,7 @@ def main():
                             if transcription:
                                 # 2. Play filler phrase immediately so the user hears
                                 #    something while the backend processes the request.
-                                filler = random.choice(FILLER_PHRASES)
-                                speak_text(filler)
+                                speak_text(_say("thinking", Situation.THINKING))
 
                                 # 3. Send to backend
                                 print("Sending to backend...")
@@ -219,13 +259,13 @@ def main():
                                         speak_text(answer)
                                     else:
                                         print(f"API Error: {response.status_code} - {response.text}")
-                                        speak_text("Sorry, the backend returned an error.")
+                                        speak_text(_say("error", Situation.ERROR))
                                 except requests.exceptions.RequestException as e:
                                     print(f"Connection Error: {e}")
-                                    speak_text("Sorry, I could not connect to the local API. Make sure main.py is running.")
+                                    speak_text(_say("error", Situation.ERROR))
                         except Exception as e:
                             print(f"Error during processing: {e}")
-                            speak_text("I encountered an error processing your audio.")
+                            speak_text(_say("error", Situation.ERROR))
                     else:
                         print("Audio too short, ignoring.")
                         

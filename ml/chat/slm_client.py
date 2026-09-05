@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _SYSTEM_PROMPT = textwrap.dedent("""\
-    You are KidBot, a friendly, respectful, and safe educational assistant
-    for children. Your job is to answer questions in a warm, encouraging,
+    You are Tot, a friendly, respectful, and safe study companion for
+    children. Your job is to answer questions in a warm, encouraging,
     age-appropriate way.
 
     STRICT RULES YOU MUST FOLLOW:
@@ -85,6 +85,10 @@ _FOLLOWUP_TEMPLATE = textwrap.dedent("""\
 """)
 
 
+# The un-personalised base prompt, exposed for the pipeline to compose onto.
+BASE_SYSTEM_PROMPT = _SYSTEM_PROMPT
+
+
 def _build_first_turn_prompt(query: str, student: StudentProfile) -> str:
     return _FIRST_TURN_TEMPLATE.format(
         age=student.age,
@@ -127,6 +131,7 @@ async def call_slm(
     history: Optional[list[dict[str, str]]] = None,
     *,
     think: bool = False,
+    system_prompt: Optional[str] = None,
 ) -> Optional[SLMResponse]:
     """
     Send the query + student profile (+ optional history) to the local Ollama SLM.
@@ -137,6 +142,10 @@ async def call_slm(
         history: Previous turns as {"role": ..., "content": ...} dicts.
         think:   When True, enables Ollama thinking mode (slower but more accurate).
                  Uses OLLAMA_THINK_TIMEOUT instead of the standard timeout.
+        system_prompt: A persona-composed system prompt (see persona.prompt).
+                 Defaults to the base prompt. The pipeline builds it with
+                 persona.prompt.compose_system_prompt, which guarantees the
+                 STRICT RULES and JSON schema are still present.
 
     Returns a validated SLMResponse, or None on failure.
     """
@@ -153,7 +162,7 @@ async def call_slm(
     # Assemble full message list:
     #   [system] → [history turn 1 user] → [history turn 1 asst] → ... → [current user]
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt or _SYSTEM_PROMPT},
         *history,
         {"role": "user", "content": current_user_msg},
     ]

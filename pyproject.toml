@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tabletot-vision"
+name = "tabletot-packages"
 version = "0.1.0"
-description = "On-device face detection and recognition for the Table Tot desk companion robot"
+description = "Table Tot packages: face recognition (vision), learner profiling (learner), personality (persona)"
 requires-python = ">=3.10"
 
 # Kept minimal on purpose: this package must install on a Raspberry Pi without
@@ -29,8 +29,13 @@ tabletot-vision = "vision.camera:main"
 
 [tool.setuptools]
 # Explicit, because auto-discovery would otherwise try to package ml/ as well.
-packages = ["vision"]
+# Each package is self-contained (own config.py) and mounted into ml/main.py.
+packages = ["vision", "learner", "persona"]
 
 [tool.pytest.ini_options]
 # Lets tests run from the repository root or from inside vision/.
-testpaths = ["vision/tests", "ml/tests"]
+testpaths = ["vision/tests", "learner/tests", "persona/tests", "ml/tests"]
+
+[tool.setuptools.package-data]
+# The questionnaire ships with the package, not just the source tree.
+learner = ["*.json"]

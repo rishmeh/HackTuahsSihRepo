@@ -47,11 +47,35 @@ class ChatRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
     student: StudentProfile
     session_id: Optional[str] = Field(None, description="Optional session identifier")
+    student_id: Optional[str] = Field(
+        None,
+        description=(
+            "Enrolled student id. When given, Tot speaks in the persona derived from "
+            "this student's onboarding questionnaire; otherwise a safe default persona."
+        ),
+    )
+    situation: str = Field(
+        "question",
+        description=(
+            "What kind of moment this is, so Tot can choose its tone: question | "
+            "correct_answer | wrong_answer | struggling | repeated_question | idle | greeting"
+        ),
+    )
 
     @field_validator("query")
     @classmethod
     def strip_query(cls, v: str) -> str:
         return v.strip()
+
+    @field_validator("situation")
+    @classmethod
+    def known_situation(cls, v: str) -> str:
+        from persona.phrases import Situation
+
+        allowed = {s.value for s in Situation}
+        if v not in allowed:
+            raise ValueError(f"situation must be one of {sorted(allowed)}")
+        return v
 
 
 # ---------------------------------------------------------------------------
