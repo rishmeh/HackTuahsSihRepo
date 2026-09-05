@@ -30,6 +30,7 @@ from flashcards.generator import generate_and_format_deck
 from flashcards.models import FlashcardDeck, FlashcardRequest
 from quiz.generator import generate_and_format_quiz
 from quiz.models import Quiz, QuizRequest
+from vision.routes import router as vision_router
 
 import config
 
@@ -50,10 +51,15 @@ app = FastAPI(
     title="KidBot ML API",
     description=(
         "Child-safe chat pipeline (local SLM → thinking-mode or OpenRouter escalation), "
-        "multimodal vision chat, age-appropriate quiz generator, and flashcard generator."
+        "multimodal vision chat, age-appropriate quiz generator, flashcard generator, "
+        "and on-device face detection / recognition."
     ),
     version="2.0.0",
 )
+
+# Face detection and recognition (YuNet + SFace). The models load lazily on the
+# first request, so the server still starts if they have not been downloaded yet.
+app.include_router(vision_router)
 
 
 # ---------------------------------------------------------------------------
