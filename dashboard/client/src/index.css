@@ -590,3 +590,16 @@ h2 { color: var(--navy); font-size: 23px; line-height: 1.06; margin-top: 8px; }
 .task-compose-save { border: 0; padding: 6px 13px; border-radius: 7px; color: #fffdf9; background: var(--navy); font-size: 9px; font-weight: 800; }
 .task-compose-save:disabled { opacity: .4; }
 .task-compose-save:not(:disabled):hover { background: var(--coral); }
+
+/* Task delete, with a two-click confirm */
+.task-delete-button { border: 0; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; color: var(--ink-soft); background: transparent; opacity: 0; transition: opacity .15s ease, color .15s ease, background .15s ease; }
+.task-row:hover .task-delete-button, .task-row:focus-within .task-delete-button { opacity: 1; }
+.task-delete-button:hover { color: #c2412b; background: #fbe4df; }
+.task-confirm { display: inline-flex; align-items: center; gap: 6px; }
+.task-confirm-yes, .task-confirm-no { border: 0; padding: 5px 10px; border-radius: 7px; font-size: 9px; font-weight: 800; }
+.task-confirm-yes { color: #fffdf9; background: #c2412b; }
+.task-confirm-yes:hover { background: #a83725; }
+.task-confirm-no { color: var(--navy); background: var(--muted); }
+.task-confirm-no:hover { background: #e2dbd0; }
+@media (hover: none) { .task-delete-button { opacity: 1; } }
+.focus-theme--dusk .task-delete-button { color: #9fb2c8; }
