@@ -88,12 +88,22 @@ function PomodoroCard({ selectedTask, onStartSession, onCompleteTask }: { select
   return <section className={`focus-card surface-card focus-theme--${theme}`}><AmbientEngine preset={ambient} volume={volume} enabled={soundEnabled} /><div className="focus-card-header"><div><div className="eyebrow eyebrow--coral"><span className="sun-dot" /> Focus room</div><h2>One focused block is enough to begin.</h2></div><button className="round-more" aria-label="More focus options" onClick={() => setSettingsOpen(!settingsOpen)}><MoreHorizontal size={18} /></button></div>{settingsOpen && <FocusControls ambient={ambient} setAmbient={setAmbient} volume={volume} setVolume={setVolume} soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled} theme={theme} setTheme={setTheme} />}<div className="focus-content"><div className="timer-column"><div className="timer-tabs"><button className={mode === "focus" ? "timer-tab--active" : ""} onClick={() => switchMode("focus")}>Focus <span>25 min</span></button><button className={mode === "break" ? "timer-tab--active" : ""} onClick={() => switchMode("break")}>Break <span>5 min</span></button></div><div className={`timer-ring ${running ? "timer-ring--running" : ""}`} style={{ "--timer-progress": `${progress}%` } as React.CSSProperties}><div className="timer-ring-inner"><span className="timer-kicker">{running ? "In the zone" : mode === "focus" ? "Ready to focus" : "Reset gently"}</span><strong>{minutes}:{secs}</strong><span className="timer-sub">{mode === "focus" ? selectedTask?.title ?? "choose a task" : "take a breath"}</span></div></div><div className="timer-actions"><button className="timer-primary" onClick={toggleRunning}>{running ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}{running ? "Pause session" : "Start focus"}</button><button className="timer-reset" onClick={() => { setRunning(false); setSeconds(total); }} aria-label="Reset timer"><RotateCcw size={17} /></button></div></div><div className="focus-side"><div className="now-playing"><div><span className="eyebrow">Now working on</span><strong>{selectedTask?.title ?? "Choose a task to begin"}</strong><span className="focus-meta"><Clock3 size={13} /> {selectedTask?.subject ?? "Your next small step"}</span>{selectedTask && <button className="task-complete-button" onClick={() => onCompleteTask(selectedTask.id)}>{selectedTask.done ? "Completed" : "Mark complete"}</button>}</div></div><div className="focus-nudge"><strong>Small nudge.</strong> Put your phone face down. Your future self will thank you.</div><div className="focus-footer"><span>{ambient === "quiet" ? "Quiet room" : `${ambientLabels[ambient].label} on`}</span><button onClick={() => setSettingsOpen(!settingsOpen)}>{settingsOpen ? "Hide settings" : "Tune the room"}</button></div></div></div></section>;
 }
 
-function TaskList({ tasks, onToggle, onAdd, onFocus, onRename }: { tasks: Task[]; onToggle: (id: number) => void; onAdd: () => void; onFocus: (taskId: number) => void; onRename: (id: number, title: string) => void }) {
+function TaskList({ tasks, onToggle, onAdd, onFocus, onRename }: { tasks: Task[]; onToggle: (id: number) => void; onAdd: (title: string) => void; onFocus: (taskId: number) => void; onRename: (id: number, title: string) => void }) {
   const completed = tasks.filter((task) => task.done).length;
   // Which task is being renamed, and its in-progress text. Local state, so a
   // half-typed title is never written to the server.
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
+  // A new task being written. Nothing is created until there is a title,
+  // so an abandoned compose leaves no empty row behind.
+  const [composing, setComposing] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const cancelComposing = () => { setComposing(false); setNewTitle(""); };
+  const commitComposing = () => {
+    const title = newTitle.trim();
+    if (title) onAdd(title);
+    cancelComposing();
+  };
   const startEditing = (task: Task) => { setEditingId(task.id); setDraft(task.title); };
   const cancelEditing = () => { setEditingId(null); setDraft(""); };
   const commitEditing = (task: Task) => {
@@ -109,10 +119,32 @@ function TaskList({ tasks, onToggle, onAdd, onFocus, onRename }: { tasks: Task[]
           <div className="eyebrow"><span className="sun-dot sun-dot--muted" /> Today’s rhythm</div>
           <h2>Task list <span className="inline-count">{completed}/{tasks.length}</span></h2>
         </div>
-        <button className="text-button" onClick={onAdd}><Plus size={16} /> Add task</button>
+        <button className="text-button" onClick={() => (composing ? cancelComposing() : setComposing(true))}><Plus size={16} /> Add task</button>
       </div>
       <div className="task-progress"><span style={{ width: `${tasks.length ? (completed / tasks.length) * 100 : 0}%` }} /></div>
       <div className="task-list">
+        {composing && (
+          <div className="task-row task-row--composing">
+            <div className="task-main task-main--editing">
+              <span className="task-check task-check--gold" aria-hidden="true" />
+              <input
+                className="task-title-input"
+                value={newTitle}
+                autoFocus
+                maxLength={240}
+                placeholder="What is the next small step?"
+                aria-label="New task"
+                onChange={(event) => setNewTitle(event.target.value)}
+                onBlur={commitComposing}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") { event.preventDefault(); commitComposing(); }
+                  if (event.key === "Escape") { event.preventDefault(); cancelComposing(); }
+                }}
+              />
+            </div>
+            <button className="task-compose-save" onMouseDown={(event) => event.preventDefault()} onClick={commitComposing} disabled={!newTitle.trim()}>Add</button>
+          </div>
+        )}
         {tasks.map((task) => (
           <div className={`task-row ${task.done ? "task-row--done" : ""} ${editingId === task.id ? "task-row--editing" : ""}`} key={task.id}>
             {editingId === task.id ? (
@@ -146,7 +178,7 @@ function TaskList({ tasks, onToggle, onAdd, onFocus, onRename }: { tasks: Task[]
             <ChevronRight size={16} className="task-arrow" />
           </div>
         ))}
-        {tasks.length === 0 && <p className="login-hint">No tasks yet — add one above or import a syllabus.</p>}
+        {tasks.length === 0 && <p className="login-hint">No tasks yet — press Add task to write your first one, or import a syllabus.</p>}
       </div>
     </section>
   );
@@ -170,7 +202,7 @@ function formatMinutes(totalMinutes: number) {
   return `${hours}h ${minutes}m`;
 }
 
-function StudentDashboard({ profile, tasks, kpis, selectedTask, onToggle, onAdd, onFocus, onStartSession, onCompleteTask, onSyllabus, onRename }: { profile: ProfileSummary; tasks: Task[]; kpis?: Kpis; selectedTask?: Task; onToggle: (id: number) => void; onAdd: () => void; onFocus: (taskId: number) => void; onStartSession: (taskId: number | null) => void; onCompleteTask: (taskId: number) => void; onSyllabus: () => void; onRename: (id: number, title: string) => void }) {
+function StudentDashboard({ profile, tasks, kpis, selectedTask, onToggle, onAdd, onFocus, onStartSession, onCompleteTask, onSyllabus, onRename }: { profile: ProfileSummary; tasks: Task[]; kpis?: Kpis; selectedTask?: Task; onToggle: (id: number) => void; onAdd: (title: string) => void; onFocus: (taskId: number) => void; onStartSession: (taskId: number | null) => void; onCompleteTask: (taskId: number) => void; onSyllabus: () => void; onRename: (id: number, title: string) => void }) {
   const firstName = profile.name.trim().split(/\s+/)[0] || profile.name;
   return <div className="page-content student-page"><div className="page-intro"><div><div className="eyebrow eyebrow--coral"><span className="sun-dot" /> Today</div><h1>Good afternoon, {firstName}.</h1><p>Let’s make a little room for your best thinking.</p></div><div className="intro-actions"><button className="import-syllabus-button" onClick={onSyllabus}>Import syllabus</button><button className="help-link" onClick={() => toast.info("Try starting with a 25 minute focus block")}><CircleHelp size={16} /> How it works</button></div></div><div className="metrics-grid"><MetricCard label="Total focus" value={kpis ? formatMinutes(kpis.focusMinutesTotal) : "—"} note={kpis ? `${kpis.sessionsCompleted} block${kpis.sessionsCompleted === 1 ? "" : "s"} completed` : "No sessions yet"} icon={Clock3} tone="coral" /><MetricCard label="Study streak" value={kpis ? `${kpis.currentStreakDays} day${kpis.currentStreakDays === 1 ? "" : "s"}` : "—"} note="Consecutive days with a completed block" icon={Flame} tone="navy" /><MetricCard label="Tasks complete" value={`${tasks.filter((task) => task.done).length} / ${tasks.length}`} note="Small wins add up" icon={ListChecks} tone="mint" progress={tasks.length ? (tasks.filter((task) => task.done).length / tasks.length) * 100 : 0} /><MetricCard label="Energy check" value="Feeling good" note="Not tracked yet" icon={Heart} tone="sand" /></div><div className="student-grid student-grid--integrated" id="student-focus-room"><div className="focus-column"><PomodoroCard selectedTask={selectedTask} onStartSession={onStartSession} onCompleteTask={onCompleteTask} /><div className="focus-bridge"><Target size={15} /><span><strong>Task → focus → reset.</strong> Choose a small step, protect the block, then mark it complete from the room.</span></div></div><div className="task-column"><TaskList tasks={tasks} onToggle={onToggle} onAdd={onAdd} onFocus={onFocus} onRename={onRename} /><p className="companion-quote">“You don’t need a perfect day. Just the next honest block.”</p><div className="privacy-strip"><LockKeyhole size={16} /><span><strong>Private by design.</strong> Your study rhythm stays on this device.</span></div></div></div></div>;
 }
@@ -228,7 +260,7 @@ export default function Home({ profile, onLoggedOut }: { profile: ProfileSummary
     if (task && !task.done) toast.success("Nice work — one more small win.");
   };
   const renameTask = (id: number, title: string) => { renameTaskMutation.mutate({ id, title }); };
-  const addTask = () => { createTaskMutation.mutate({ title: "Add your next small step", subject: "Personal", due: "Today", color: "gold" }); toast.success("A new task is ready to shape"); };
+  const addTask = (title: string) => { createTaskMutation.mutate({ title, subject: "Personal", due: "Today", color: "gold" }); toast.success("Task added"); };
   const focusTask = (taskId: number) => { setSelectedTaskId(taskId); window.requestAnimationFrame(() => document.getElementById("student-focus-room")?.scrollIntoView({ behavior: "smooth", block: "start" })); toast.success("Task loaded into the focus room"); };
   const startSession = (taskId: number | null) => { startFocusMutation.mutate({ taskId }, { onSuccess: (session) => { activeSessionRef.current = { sessionId: session.id, startedAt: Date.now() }; } }); };
   const completeTask = (taskId: number) => {

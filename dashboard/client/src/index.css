@@ -584,3 +584,9 @@ h2 { color: var(--navy); font-size: 23px; line-height: 1.06; margin-top: 8px; }
 
 /* Dark focus room keeps the rename affordance legible */
 .focus-theme--dusk .task-title-input { color: #f2f6fb; border-bottom-color: #ffa78f; }
+
+.task-row--composing { background: var(--coral-soft); }
+.task-title-input::placeholder { color: var(--ink-soft); font-weight: 500; }
+.task-compose-save { border: 0; padding: 6px 13px; border-radius: 7px; color: #fffdf9; background: var(--navy); font-size: 9px; font-weight: 800; }
+.task-compose-save:disabled { opacity: .4; }
+.task-compose-save:not(:disabled):hover { background: var(--coral); }
