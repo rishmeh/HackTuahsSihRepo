@@ -128,3 +128,21 @@ they override priors and are refused if a constraint forbids them.
 - This table is the first piece of the students database the implementation
   plan calls for. `student_id` is the key that will join it to face embeddings
   (`vision/`) and sessions.
+
+## Dashboard wiring (student onboarding UI)
+
+The student sees this questionnaire in `dashboard/` right after their first
+login, as illustrated cards. The browser **never** calls this API directly:
+
+```
+browser ──tRPC──> dashboard/server/onboardingRouter.ts ──HTTP──> /learner/*
+                  questionnaire → scenes only
+                  status        → { completed }
+                  submit        → { ok, answered }      ← profile & settings dropped here
+```
+
+`student_id` on this side is the dashboard's `profiles.id`. Set `ML_API_URL`
+for the dashboard server if the ml API is not on `http://127.0.0.1:8000`.
+
+UI: `dashboard/client/src/pages/Onboarding.tsx`, `components/onboarding/`.
+Photos: `dashboard/client/public/onboarding/` (see `ATTRIBUTION.md` there).

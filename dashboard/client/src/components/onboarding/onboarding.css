@@ -1,0 +1,291 @@
+/* Onboarding cards — Editorial Study Desk look: cream paper, navy ink, one accent. */
+
+.onb-shell {
+  position: relative;
+  overflow-x: hidden;
+  min-height: 100vh;
+  background: var(--cream, #f8f5ef) url("/onboarding/leaf-frame.jpg") center / cover no-repeat fixed;
+  color: var(--navy, #17324d);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 22px 18px 34px;
+  box-sizing: border-box;
+}
+.onb-shell > * { position: relative; z-index: 1; }
+
+.onb-top {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+  /* A translucent cream pill, so the label and dots stay readable when the
+     leafy background runs behind them on shorter screens. */
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 253, 249, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 1px 0 rgba(23, 50, 77, 0.06);
+  box-sizing: border-box;
+}
+
+.onb-progress {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.onb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--muted, #eeeae2);
+  transition: transform 160ms ease, background 160ms ease;
+}
+.onb-dot--done { background: var(--mint, #b9dcca); opacity: 0.75; }
+.onb-dot--active { background: var(--coral, #e9755b); transform: scale(1.15); }
+
+.onb-step {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--navy, #17324d);
+}
+
+.onb-card {
+  width: 100%;
+  max-width: 720px;
+  background: var(--paper, #fffdf9);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px -30px rgba(23, 50, 77, 0.35), 0 1px 0 rgba(23, 50, 77, 0.06);
+  overflow: hidden;
+}
+
+.onb-hero {
+  position: relative;
+  width: 100%;
+  height: clamp(180px, 26vw, 260px);
+  background: var(--navy, #17324d);
+}
+.onb-hero img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.onb-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(23, 50, 77, 0) 45%, rgba(23, 50, 77, 0.72) 100%);
+}
+.onb-hero-caption {
+  position: absolute;
+  left: 20px;
+  bottom: 14px;
+  z-index: 1;
+  color: #fbf8f2;
+  font-family: "DM Serif Display", Georgia, serif;
+  font-size: 24px;
+  letter-spacing: -0.03em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.onb-body { padding: 20px 24px 22px; }
+
+.onb-story {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--navy-soft, #244a68);
+  margin: 0 0 10px;
+}
+.onb-question {
+  font-family: "DM Serif Display", Georgia, serif;
+  font-size: 25px;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  margin: 0 0 14px;
+}
+
+.onb-options {
+  display: grid;
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .onb-options { grid-template-columns: 1fr 1fr; }
+}
+
+.onb-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px 12px 12px;
+  border-radius: 14px;
+  border: 1.5px solid var(--muted, #eeeae2);
+  background: #fff;
+  color: var(--navy, #17324d);
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+.onb-option:hover,
+.onb-option:focus-visible {
+  border-color: var(--navy, #17324d);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px -18px rgba(23, 50, 77, 0.6);
+  outline: none;
+}
+.onb-option--picked {
+  border-color: var(--coral, #e9755b);
+  background: var(--coral-soft, #f7e5df);
+}
+
+.onb-letter {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+  color: #fbf8f2;
+}
+.onb-letter--coral { background: var(--coral, #e9755b); }
+.onb-letter--navy { background: var(--navy, #17324d); }
+.onb-letter--mint { background: #5c9f7c; }
+.onb-letter--sand { background: #c9962e; }
+
+.onb-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  gap: 12px;
+}
+.onb-back {
+  background: none;
+  border: none;
+  color: var(--navy, #17324d);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 4px;
+}
+.onb-back:disabled { opacity: 0.35; cursor: default; }
+.onb-hint { font-size: 13px; color: var(--navy-soft, #244a68); }
+
+/* Age card */
+.onb-ages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.onb-age {
+  min-width: 52px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--muted, #eeeae2);
+  background: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--navy, #17324d);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+.onb-age:hover { border-color: var(--navy, #17324d); transform: translateY(-1px); }
+.onb-age--picked { border-color: var(--coral, #e9755b); background: var(--coral-soft, #f7e5df); }
+
+.onb-primary {
+  padding: 13px 22px;
+  border-radius: 14px;
+  border: none;
+  background: var(--navy, #17324d);
+  color: #fbf8f2;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+.onb-primary:hover { transform: translateY(-1px); }
+.onb-primary:disabled { opacity: 0.45; cursor: default; transform: none; }
+
+/* Finish */
+.onb-finish { text-align: center; padding: 34px 26px 36px; }
+.onb-finish h1 {
+  font-family: "DM Serif Display", Georgia, serif;
+  font-size: 34px;
+  letter-spacing: -0.04em;
+  margin: 0 0 10px;
+}
+.onb-finish p { color: var(--navy-soft, #244a68); font-size: 16px; line-height: 1.6; margin: 0 0 22px; }
+
+/* States */
+.onb-state { max-width: 560px; text-align: center; padding: 40px 20px; color: var(--navy-soft, #244a68); }
+.onb-state h2 { font-family: "DM Serif Display", Georgia, serif; font-size: 26px; margin: 0 0 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-option, .onb-age, .onb-primary, .onb-dot { transition: none; }
+}
+
+/* Petals and blossoms over the leaf-frame background ------------------------ */
+.onb-petals {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.onb-blossom {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 2px 4px rgba(23, 50, 77, 0.25));
+  animation: onb-blossom 9s ease-in-out infinite;
+}
+.onb-petal-fall {
+  position: absolute;
+  top: -6vh;
+  animation-name: onb-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  opacity: 0.8;
+}
+.onb-petal-sway {
+  animation-name: onb-sway;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes onb-fall {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(112vh); }
+}
+@keyframes onb-sway {
+  0%, 100% { transform: translateX(calc(var(--sway) * -1)) rotate(-25deg); }
+  50% { transform: translateX(var(--sway)) rotate(25deg); }
+}
+@keyframes onb-blossom {
+  0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  50% { transform: translate(-50%, -50%) scale(1.08) rotate(4deg); }
+}
+
+@media (max-width: 900px) {
+  .onb-shell { background-size: auto 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .onb-petal-fall, .onb-petal-sway, .onb-blossom { animation: none; }
+  .onb-petal-fall { display: none; }
+}

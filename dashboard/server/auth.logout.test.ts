@@ -27,6 +27,8 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
 
   const ctx: TrpcContext = {
     user,
+    // Manus OAuth session only — no student/parent profile is signed in here.
+    profile: null,
     req: {
       protocol: "https",
       headers: {},

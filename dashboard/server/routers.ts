@@ -4,6 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { focusRouter } from "./focusRouter";
+import { onboardingRouter } from "./onboardingRouter";
 import { profileRouter } from "./profileRouter";
 import { extractAssignmentsFromSyllabus } from "./syllabus";
 import { tasksRouter } from "./tasksRouter";
@@ -21,6 +22,7 @@ export const appRouter = router({
   profile: profileRouter,
   tasks: tasksRouter,
   focus: focusRouter,
+  onboarding: onboardingRouter,
   syllabus: router({
     extract: publicProcedure
       .input(

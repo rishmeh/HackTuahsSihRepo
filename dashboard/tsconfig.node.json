@@ -1,5 +1,8 @@
 {
   "compilerOptions": {
+    /* Referenced from tsconfig.json, so it must be composite. */
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo.node",
     "target": "ES2022",
     "lib": ["ES2023"],
     "module": "ESNext",
