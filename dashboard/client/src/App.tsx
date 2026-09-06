@@ -27,7 +27,7 @@ function Gate() {
   if (me.data.role === "student") {
     if (onboarding.isLoading) return <DashboardLayoutSkeleton />;
     if (onboarding.data && !onboarding.data.completed) {
-      return <Onboarding profile={me.data} onDone={() => onboarding.refetch()} />;
+      return <Onboarding profile={me.data} onDone={() => onboarding.refetch()} onExit={() => me.refetch()} />;
     }
   }
 

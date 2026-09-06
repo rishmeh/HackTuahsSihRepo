@@ -35,12 +35,15 @@ function Progress({ total, current }: { total: number; current: number }) {
   );
 }
 
-export default function Onboarding({ profile, onDone }: { profile: Profile; onDone: () => void }) {
+export default function Onboarding({ profile, onDone, onExit }: { profile: Profile; onDone: () => void; onExit: () => void }) {
   const questionnaire = trpc.onboarding.questionnaire.useQuery(undefined, {
     staleTime: Infinity,
     retry: 1,
   });
   const submit = trpc.onboarding.submit.useMutation();
+  // The only way out of the questionnaire. A student who mistyped their name
+  // at login would otherwise be stuck here with no exit.
+  const logout = trpc.profile.logout.useMutation({ onSuccess: onExit });
 
   const [step, setStep] = useState(0); // 0 = age card, 1..N = scenes, N+1 = finish
   const [age, setAge] = useState<number | null>(null);
@@ -177,9 +180,11 @@ export default function Onboarding({ profile, onDone }: { profile: Profile; onDo
         )}
       </AnimatePresence>
 
-      {!finished && step >= 1 && (
+      {!finished && (
         <div className="onb-top" style={{ marginTop: 14 }}>
-          <button className="onb-back" onClick={() => setStep((s) => Math.max(0, s - 1))}>
+          <button className="onb-back" onClick={() => (step === 0 ? logout.mutate() : setStep((s) => s - 1))}
+            disabled={logout.isPending}
+            title={step === 0 ? "Go back to sign in" : "Previous question"}>
             ← Back
           </button>
           <span className="onb-hint">Pick whichever feels most like you.</span>

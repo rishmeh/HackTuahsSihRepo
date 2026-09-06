@@ -289,3 +289,19 @@
   .onb-petal-fall, .onb-petal-sway, .onb-blossom { animation: none; }
   .onb-petal-fall { display: none; }
 }
+
+/* Escape hatch: deliberately quiet, so it does not invite abandoning the
+   story, but always reachable if the student is signed in as someone else. */
+.onb-exit {
+  border: 0;
+  padding: 4px 8px;
+  border-radius: 8px;
+  color: var(--ink-soft, #72808a);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color .15s ease, background .15s ease;
+}
+.onb-exit:hover { color: var(--navy, #17324d); background: rgba(23, 50, 77, 0.06); }
+.onb-exit:disabled { opacity: .5; cursor: default; }
