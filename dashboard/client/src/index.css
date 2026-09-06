@@ -412,12 +412,59 @@ h2 { color: var(--navy); font-size: 23px; line-height: 1.06; margin-top: 8px; }
 .theme-swatch--dusk > span { background: linear-gradient(135deg, #253b5a 0 50%, #536780 50%); }
 .theme-swatch--meadow > span { background: linear-gradient(135deg, #eaf4ee 0 50%, #b9dcca 50%); }
 .theme-swatch--active { border-color: var(--coral); }
-.focus-theme--dusk { background-color: #f3f0ea; }
-.focus-theme--dusk .timer-ring::before { background: #f3f0ea; }
-.focus-theme--dusk .timer-ring-inner strong, .focus-theme--dusk h2 { color: #253b5a; }
-.focus-theme--meadow { background-color: #f3f8f2; }
-.focus-theme--meadow .timer-ring::before { background: #f3f8f2; }
-.focus-theme--meadow .timer-ring-inner strong, .focus-theme--meadow h2 { color: #214d43; }
+/* Focus themes -------------------------------------------------------------
+   The card is transparent and has no horizontal padding, so a themed
+   background needs its own inset and radius or it reads as a raw slab behind
+   the content. Themed cards get that surface treatment. */
+.focus-theme--dusk, .focus-theme--meadow { padding-inline: 22px; border-radius: 16px; transition: background-color .3s ease, color .3s ease; }
+@media (max-width: 720px) { .focus-theme--dusk, .focus-theme--meadow { padding-inline: 14px; } }
+
+/* Meadow — a light green room. */
+.focus-theme--meadow { background-color: #eef6ef; }
+.focus-theme--meadow .timer-ring { background: conic-gradient(var(--coral) var(--timer-progress), #d8e8db 0); }
+.focus-theme--meadow .timer-ring::before { background: #f7fbf7; }
+.focus-theme--meadow .timer-ring-inner strong, .focus-theme--meadow h2, .focus-theme--meadow .now-playing strong, .focus-theme--meadow .focus-nudge strong { color: #214d43; }
+.focus-theme--meadow .timer-tabs, .focus-theme--meadow .round-more, .focus-theme--meadow .timer-reset { background: #e2efe4; }
+
+/* Dusk — an actual dark room, matching what its swatch promises. */
+.focus-theme--dusk { background-color: #1b2f47; color: #dbe4ee; }
+.focus-theme--dusk h2,
+.focus-theme--dusk .now-playing strong,
+.focus-theme--dusk .focus-nudge strong,
+.focus-theme--dusk .timer-ring-inner strong,
+.focus-theme--dusk .focus-settings-head .eyebrow,
+.focus-theme--dusk .setting-label > span:first-child { color: #f2f6fb; }
+.focus-theme--dusk .eyebrow,
+.focus-theme--dusk .focus-meta,
+.focus-theme--dusk .timer-sub,
+.focus-theme--dusk .focus-nudge,
+.focus-theme--dusk .focus-footer,
+.focus-theme--dusk .setting-label,
+.focus-theme--dusk .volume-row,
+.focus-theme--dusk .ambient-option { color: #9fb2c8; }
+.focus-theme--dusk .eyebrow--coral, .focus-theme--dusk .timer-kicker { color: #ffa78f; }
+.focus-theme--dusk .timer-ring { background: conic-gradient(#ffa78f var(--timer-progress), #2c4763 0); box-shadow: 0 0 0 10px rgba(255,167,143,.07); }
+.focus-theme--dusk .timer-ring::before { background: #16283d; }
+.focus-theme--dusk .timer-tabs { background: #16283d; }
+.focus-theme--dusk .timer-tabs button { color: #9fb2c8; }
+.focus-theme--dusk .timer-tabs .timer-tab--active { color: #f2f6fb; background: #2c4763; box-shadow: 0 2px 5px rgba(0,0,0,.25); }
+.focus-theme--dusk .timer-primary { color: #16283d; background: #ffa78f; }
+.focus-theme--dusk .timer-primary:hover { background: #ffb9a5; }
+.focus-theme--dusk .timer-reset, .focus-theme--dusk .round-more { color: #9fb2c8; background: #22394f; }
+.focus-theme--dusk .timer-reset:hover, .focus-theme--dusk .round-more:hover { color: #ffa78f; background: #2c4763; }
+.focus-theme--dusk .now-playing,
+.focus-theme--dusk .focus-settings,
+.focus-theme--dusk .setting-block + .setting-block { border-color: rgba(255,255,255,.12); }
+.focus-theme--dusk .focus-footer button { color: #f2f6fb; }
+.focus-theme--dusk .focus-footer button:hover, .focus-theme--dusk .settings-dismiss, .focus-theme--dusk .task-complete-button { color: #ffa78f; }
+.focus-theme--dusk .setting-label > span:first-child svg { color: #ffa78f; }
+.focus-theme--dusk .sound-toggle { color: #f2f6fb; background: #22394f; }
+.focus-theme--dusk .sound-toggle:hover { color: #ffa78f; }
+.focus-theme--dusk .ambient-option { border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.04); }
+.focus-theme--dusk .ambient-option:hover { color: #f2f6fb; border-color: #ffa78f; }
+.focus-theme--dusk .ambient-option--active { color: #f2f6fb; border-color: #ffa78f; background: rgba(255,167,143,.14); box-shadow: inset 0 0 0 1px rgba(255,167,143,.25); }
+.focus-theme--dusk .volume-row input { accent-color: #ffa78f; }
+.focus-theme--dusk .theme-swatch--active { border-color: #ffa78f; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px; background: rgba(23,50,77,.32); backdrop-filter: blur(4px); }
 .syllabus-modal { width: min(100%, 610px); max-height: min(720px, calc(100vh - 40px)); overflow: auto; padding: 26px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 20px 50px rgba(23,50,77,.18); }
 .modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
@@ -525,3 +572,15 @@ h2 { color: var(--navy); font-size: 23px; line-height: 1.06; margin-top: 8px; }
   .login-brand-panel { padding: 32px; }
   .login-brand-copy { max-width: none; }
 }
+
+/* Inline task renaming */
+.task-edit-button { border: 0; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; color: var(--ink-soft); background: transparent; opacity: 0; transition: opacity .15s ease, color .15s ease, background .15s ease; }
+.task-row:hover .task-edit-button, .task-row:focus-within .task-edit-button { opacity: 1; }
+.task-edit-button:hover { color: var(--coral); background: var(--coral-soft); }
+.task-main--editing { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; padding: 0; background: transparent; }
+.task-title-input { flex: 1; min-width: 0; border: 0; border-bottom: 1.5px solid var(--coral); padding: 3px 0; color: var(--navy); background: transparent; font: inherit; font-size: 12px; font-weight: 700; outline: none; }
+.task-row--editing { background: var(--coral-soft); }
+@media (hover: none) { .task-edit-button { opacity: 1; } }
+
+/* Dark focus room keeps the rename affordance legible */
+.focus-theme--dusk .task-title-input { color: #f2f6fb; border-bottom-color: #ffa78f; }

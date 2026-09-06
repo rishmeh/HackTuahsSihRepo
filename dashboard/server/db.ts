@@ -244,6 +244,17 @@ export async function toggleTaskDone(ownerProfileId: number, taskId: number) {
   return updated[0];
 }
 
+/** Rename a task the student owns. Returns undefined when it isn't theirs. */
+export async function renameTask(ownerProfileId: number, taskId: number, title: string) {
+  const db = await getDb();
+  const updated = await db
+    .update(tasks)
+    .set({ title, updatedAt: new Date() })
+    .where(and(eq(tasks.id, taskId), eq(tasks.ownerProfileId, ownerProfileId)))
+    .returning();
+  return updated[0];
+}
+
 export async function deleteTask(ownerProfileId: number, taskId: number) {
   const db = await getDb();
   await db.delete(tasks).where(and(eq(tasks.id, taskId), eq(tasks.ownerProfileId, ownerProfileId)));

@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTask, deleteTask, insertTasksAtTop, listTasksForStudent, toggleTaskDone } from "./db";
+import { createTask, deleteTask, insertTasksAtTop, listTasksForStudent, renameTask, toggleTaskDone } from "./db";
 import { protectedProfileProcedure, router } from "./_core/trpc";
 import { resolveStudentProfileId } from "./studentScope";
 
@@ -62,6 +62,15 @@ export const tasksRouter = router({
     .mutation(async ({ ctx, input }) => {
       requireStudentWriter(ctx.profile.role);
       const task = await toggleTaskDone(ctx.profile.id, input.id);
+      if (!task) throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
+      return task;
+    }),
+
+  rename: protectedProfileProcedure
+    .input(z.object({ id: z.number(), title: z.string().trim().min(1).max(240) }))
+    .mutation(async ({ ctx, input }) => {
+      requireStudentWriter(ctx.profile.role);
+      const task = await renameTask(ctx.profile.id, input.id, input.title);
       if (!task) throw new TRPCError({ code: "NOT_FOUND", message: "Task not found" });
       return task;
     }),
