@@ -3,7 +3,9 @@ import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
+import { alarmsRouter } from "./alarmsRouter";
 import { focusRouter } from "./focusRouter";
+import { notesRouter } from "./notesRouter";
 import { onboardingRouter } from "./onboardingRouter";
 import { profileRouter } from "./profileRouter";
 import { extractAssignmentsFromSyllabus } from "./syllabus";
@@ -23,15 +25,15 @@ export const appRouter = router({
   tasks: tasksRouter,
   focus: focusRouter,
   onboarding: onboardingRouter,
+  alarms: alarmsRouter,
+  notes: notesRouter,
   syllabus: router({
     extract: publicProcedure
-      .input(
-        z.object({
-          fileName: z.string().min(1).max(160),
-          mimeType: z.string().min(1).max(120),
-          fileBase64: z.string().min(1).max(7_000_000),
-        }),
-      )
+      .input(z.object({
+        fileName: z.string().min(1).max(160),
+        mimeType: z.string().min(1).max(120),
+        fileBase64: z.string().min(1).max(7_000_000),
+      }))
       .mutation(({ input }) => extractAssignmentsFromSyllabus(input)),
   }),
 });

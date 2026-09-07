@@ -11,6 +11,14 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import type { ExtractedAssignment } from "../../../shared/syllabus";
+import { AlarmWidget } from "@/components/widgets/AlarmWidget";
+import { ChatHistoryWidget } from "@/components/widgets/ChatHistoryWidget";
+import { ClockWidget } from "@/components/widgets/ClockWidget";
+import { NotesWidget } from "@/components/widgets/NotesWidget";
+import { TimerWidget } from "@/components/widgets/TimerWidget";
+import { VoiceButton } from "@/components/widgets/VoiceButton";
+import { WeatherWidget } from "@/components/widgets/WeatherWidget";
+import { WebcamWidget } from "@/components/widgets/WebcamWidget";
 
 type ProfileSummary = { id: number; role: "student" | "parent"; name: string };
 type Task = { id: number; title: string; subject: string; due: string; done: boolean; color: string; priority?: string | null; source?: string | null };
@@ -213,9 +221,28 @@ function formatMinutes(totalMinutes: number) {
   return `${hours}h ${minutes}m`;
 }
 
+function WidgetDock({ profileId }: { profileId: number }) {
+  const sessionId = `profile-${profileId}`;
+  return (
+    <div className="px-4 pb-8 pt-2">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1">Your Desk</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <ClockWidget />
+        <WeatherWidget />
+        <VoiceButton profileId={profileId} />
+        <TimerWidget />
+        <AlarmWidget />
+        <NotesWidget />
+        <ChatHistoryWidget sessionId={sessionId} />
+        <WebcamWidget />
+      </div>
+    </div>
+  );
+}
+
 function StudentDashboard({ profile, tasks, kpis, selectedTask, onToggle, onAdd, onFocus, onStartSession, onCompleteTask, onSyllabus, onRename, onDelete }: { profile: ProfileSummary; tasks: Task[]; kpis?: Kpis; selectedTask?: Task; onToggle: (id: number) => void; onAdd: (title: string) => void; onFocus: (taskId: number) => void; onStartSession: (taskId: number | null) => void; onCompleteTask: (taskId: number) => void; onSyllabus: () => void; onRename: (id: number, title: string) => void; onDelete: (id: number) => void }) {
   const firstName = profile.name.trim().split(/\s+/)[0] || profile.name;
-  return <div className="page-content student-page"><div className="page-intro"><div><div className="eyebrow eyebrow--coral"><span className="sun-dot" /> Today</div><h1>Good afternoon, {firstName}.</h1><p>Let’s make a little room for your best thinking.</p></div><div className="intro-actions"><button className="import-syllabus-button" onClick={onSyllabus}>Import syllabus</button><button className="help-link" onClick={() => toast.info("Try starting with a 25 minute focus block")}><CircleHelp size={16} /> How it works</button></div></div><div className="metrics-grid"><MetricCard label="Total focus" value={kpis ? formatMinutes(kpis.focusMinutesTotal) : "—"} note={kpis ? `${kpis.sessionsCompleted} block${kpis.sessionsCompleted === 1 ? "" : "s"} completed` : "No sessions yet"} icon={Clock3} tone="coral" /><MetricCard label="Study streak" value={kpis ? `${kpis.currentStreakDays} day${kpis.currentStreakDays === 1 ? "" : "s"}` : "—"} note="Consecutive days with a completed block" icon={Flame} tone="navy" /><MetricCard label="Tasks complete" value={`${tasks.filter((task) => task.done).length} / ${tasks.length}`} note="Small wins add up" icon={ListChecks} tone="mint" progress={tasks.length ? (tasks.filter((task) => task.done).length / tasks.length) * 100 : 0} /><MetricCard label="Energy check" value="Feeling good" note="Not tracked yet" icon={Heart} tone="sand" /></div><div className="student-grid student-grid--integrated" id="student-focus-room"><div className="focus-column"><PomodoroCard selectedTask={selectedTask} onStartSession={onStartSession} onCompleteTask={onCompleteTask} /><div className="focus-bridge"><Target size={15} /><span><strong>Task → focus → reset.</strong> Choose a small step, protect the block, then mark it complete from the room.</span></div></div><div className="task-column"><TaskList tasks={tasks} onToggle={onToggle} onAdd={onAdd} onFocus={onFocus} onRename={onRename} onDelete={onDelete} /><p className="companion-quote">“You don’t need a perfect day. Just the next honest block.”</p><div className="privacy-strip"><LockKeyhole size={16} /><span><strong>Private by design.</strong> Your study rhythm stays on this device.</span></div></div></div></div>;
+  return (<><div className="page-content student-page"><div className="page-intro"><div><div className="eyebrow eyebrow--coral"><span className="sun-dot" /> Today</div><h1>Good afternoon, {firstName}.</h1><p>Let’s make a little room for your best thinking.</p></div><div className="intro-actions"><button className="import-syllabus-button" onClick={onSyllabus}>Import syllabus</button><button className="help-link" onClick={() => toast.info("Try starting with a 25 minute focus block")}><CircleHelp size={16} /> How it works</button></div></div><div className="metrics-grid"><MetricCard label="Total focus" value={kpis ? formatMinutes(kpis.focusMinutesTotal) : "—"} note={kpis ? `${kpis.sessionsCompleted} block${kpis.sessionsCompleted === 1 ? "" : "s"} completed` : "No sessions yet"} icon={Clock3} tone="coral" /><MetricCard label="Study streak" value={kpis ? `${kpis.currentStreakDays} day${kpis.currentStreakDays === 1 ? "" : "s"}` : "—"} note="Consecutive days with a completed block" icon={Flame} tone="navy" /><MetricCard label="Tasks complete" value={`${tasks.filter((task) => task.done).length} / ${tasks.length}`} note="Small wins add up" icon={ListChecks} tone="mint" progress={tasks.length ? (tasks.filter((task) => task.done).length / tasks.length) * 100 : 0} /><MetricCard label="Energy check" value="Feeling good" note="Not tracked yet" icon={Heart} tone="sand" /></div><div className="student-grid student-grid--integrated" id="student-focus-room"><div className="focus-column"><PomodoroCard selectedTask={selectedTask} onStartSession={onStartSession} onCompleteTask={onCompleteTask} /><div className="focus-bridge"><Target size={15} /><span><strong>Task → focus → reset.</strong> Choose a small step, protect the block, then mark it complete from the room.</span></div></div><div className="task-column"><TaskList tasks={tasks} onToggle={onToggle} onAdd={onAdd} onFocus={onFocus} onRename={onRename} onDelete={onDelete} /><p className="companion-quote">“You don’t need a perfect day. Just the next honest block.”</p><div className="privacy-strip"><LockKeyhole size={16} /><span><strong>Private by design.</strong> Your study rhythm stays on this device.</span></div></div></div></div><WidgetDock profileId={profile.id} /></>);
 }
 
 function ParentDashboard({ profile }: { profile: ProfileSummary }) {

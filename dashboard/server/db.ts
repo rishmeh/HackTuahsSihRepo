@@ -77,6 +77,65 @@ async function ensureSchema(db: ReturnType<typeof drizzle>) {
     isActive INTEGER NOT NULL DEFAULT 0,
     updatedAt INTEGER NOT NULL
   )`));
+  await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS timers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerProfileId INTEGER NOT NULL DEFAULT 0,
+    label TEXT NOT NULL DEFAULT 'Timer',
+    durationSeconds INTEGER NOT NULL,
+    targetAt INTEGER,
+    status TEXT NOT NULL DEFAULT 'idle',
+    remainingSeconds INTEGER,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  )`));
+  await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS alarms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerProfileId INTEGER NOT NULL DEFAULT 0,
+    label TEXT NOT NULL DEFAULT 'Alarm',
+    targetAt INTEGER NOT NULL,
+    repeatDays TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    snoozedUntil INTEGER,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  )`));
+  await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerProfileId INTEGER NOT NULL DEFAULT 0,
+    title TEXT NOT NULL DEFAULT 'Untitled',
+    content TEXT NOT NULL DEFAULT '',
+    tags TEXT,
+    isPinned INTEGER NOT NULL DEFAULT 0,
+    color TEXT NOT NULL DEFAULT 'yellow',
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  )`));
+  await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS chatHistory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sessionId TEXT NOT NULL,
+    ownerProfileId INTEGER,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    source TEXT,
+    createdAt INTEGER NOT NULL
+  )`));
+  await db.run(
+    sql.raw(`CREATE INDEX IF NOT EXISTS chatHistory_sid ON chatHistory (sessionId)`)
+  );
+  await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS faceLogs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    studentId TEXT,
+    profileId INTEGER,
+    score INTEGER,
+    frameSource TEXT DEFAULT 'pi_camera',
+    createdAt INTEGER NOT NULL
+  )`));
+  await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS weatherCache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    location TEXT NOT NULL UNIQUE,
+    data TEXT NOT NULL,
+    fetchedAt INTEGER NOT NULL
+  )`));
 }
 
 export async function getDb() {

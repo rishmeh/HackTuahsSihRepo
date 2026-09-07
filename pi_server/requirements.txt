@@ -1,0 +1,5 @@
+flask>=3.0
+flask-cors>=4.0
+picamera2
+Pillow>=10.0
+requests>=2.31
