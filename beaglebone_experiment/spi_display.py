@@ -18,6 +18,11 @@ with the PRU servo pins P9_29 / P9_31 or HDMI:
   DC/RS     | P9_15                        — GPIO (P9_12 conflicts with HDMI)
   CS        | P9_17                        — SPI0_CS0 (hardware chip select)
   BL/LED    | P9_14 (GPIO) or tie to VCC  — backlight (optional)
+
+GPIO Control:
+  Uses libgpiod (chardev API) instead of legacy sysfs (/sys/class/gpio).
+  Sysfs GPIO is deprecated and unreliable on kernel 6.12+.
+  Install: sudo apt install python3-libgpiod
 """
 
 from __future__ import annotations
@@ -62,9 +67,99 @@ _INIT_SEQUENCE = [
 ]
 
 
-def _gpio_sysfs_write(path: str, value: str) -> None:
-    with open(path, 'w') as f:
-        f.write(value)
+class GpioLine:
+    """Wrapper around libgpiod for a single GPIO line output.
+    Supports both gpiod v1 and v2 APIs."""
+
+    def __init__(self, gpio_number: int, consumer: str = "spi_display"):
+        self._gpio_number = gpio_number
+        self._consumer = consumer
+        self._chip = None
+        self._line = None
+        self._request = None
+        self._version = None
+
+        try:
+            import gpiod
+        except ImportError as exc:
+            raise RuntimeError(
+                "python3-libgpiod is not installed. On the BBB run: "
+                "sudo apt install python3-libgpiod"
+            ) from exc
+
+        self._gpiod = gpiod
+        self._setup()
+
+    def _find_chip_and_line(self):
+        """Find which gpiochip contains our GPIO line."""
+        # On BBB, GPIO0 = gpiochip0 (pins 0-31), GPIO1 = gpiochip1 (pins 32-63), etc.
+        bank = self._gpio_number // 32
+        line_offset = self._gpio_number % 32
+        chip_name = f"gpiochip{bank}"
+
+        # Verify the chip exists
+        chip_path = f"/dev/{chip_name}"
+        if not os.path.exists(chip_path):
+            # Fallback: scan all chips
+            for i in range(4):
+                path = f"/dev/gpiochip{i}"
+                if os.path.exists(path):
+                    chip_name = f"gpiochip{i}"
+                    break
+
+        return chip_name, line_offset
+
+    def _setup(self):
+        chip_name, line_offset = self._find_chip_and_line()
+        logger.debug("GPIO %d → %s line %d", self._gpio_number, chip_name, line_offset)
+
+        try:
+            # Try gpiod v2 API first
+            self._chip = self._gpiod.Chip(chip_name)
+            self._request = self._gpiod.request_lines(
+                {self._consumer: [line_offset]},
+                consumer=self._consumer,
+            )
+            self._version = 2
+            logger.debug("Using gpiod v2 API for GPIO %d", self._gpio_number)
+        except (AttributeError, TypeError):
+            # Fall back to gpiod v1 API
+            try:
+                self._chip = self._gpiod.Chip(chip_name, self._gpiod.Chip.OPEN_BY_NAME)
+                self._line = self._chip.get_line(line_offset)
+                self._line.request(
+                    consumer=self._consumer,
+                    type=self._gpiod.LINE_REQ_DIR_OUT,
+                    default_val=0,
+                )
+                self._version = 1
+                logger.debug("Using gpiod v1 API for GPIO %d", self._gpio_number)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Failed to request GPIO {self._gpio_number} on {chip_name}: {exc}"
+                ) from exc
+
+    def set_value(self, value: int) -> None:
+        """Set GPIO high (1) or low (0)."""
+        if self._version == 2:
+            self._request.set_value(self._consumer, value)
+        else:
+            self._line.set_value(value)
+
+    def cleanup(self):
+        """Release the GPIO line."""
+        try:
+            if self._version == 2 and self._request:
+                self._request.release()
+            elif self._version == 1 and self._line:
+                self._line.release()
+        except Exception:
+            pass
+        try:
+            if self._chip:
+                self._chip.close()
+        except Exception:
+            pass
 
 
 class SpiDisplay:
@@ -162,34 +257,21 @@ class SpiDisplay:
 
     # ------------------------------------------------------------------ GPIO / SPI
 
-    @staticmethod
-    def _export_gpio(gpio: int) -> None:
-        path = f"/sys/class/gpio/gpio{gpio}"
-        if not os.path.isdir(path):
-            _gpio_sysfs_write("/sys/class/gpio/export", str(gpio))
-            # udev / gpio subsystem may take a moment to create the directory
-            for _ in range(20):
-                if os.path.isdir(path):
-                    return
-                time.sleep(0.05)
-            raise RuntimeError(f"GPIO {gpio} did not appear after export")
-
     def _setup_gpio(self) -> None:
-        for gpio in (self._dc_gpio, self._rst_gpio, self._bl_gpio):
-            self._export_gpio(gpio)
-            time.sleep(0.05)
-        _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._dc_gpio}/direction", "out")
-        _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._rst_gpio}/direction", "out")
-        _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._bl_gpio}/direction", "out")
-        _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._bl_gpio}/value", "1")  # backlight on
+        """Initialize GPIO control lines using libgpiod."""
+        self._dc = GpioLine(self._dc_gpio, consumer="spi_display_dc")
+        self._rst = GpioLine(self._rst_gpio, consumer="spi_display_rst")
+        self._bl = GpioLine(self._bl_gpio, consumer="spi_display_bl")
+        # Backlight on
+        self._bl.set_value(1)
 
     def _init_panel(self) -> None:
         # Hardware reset
-        _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._rst_gpio}/value", "1")
+        self._rst.set_value(1)
         time.sleep(0.01)
-        _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._rst_gpio}/value", "0")
+        self._rst.set_value(0)
         time.sleep(0.01)
-        _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._rst_gpio}/value", "1")
+        self._rst.set_value(1)
         time.sleep(0.12)
 
         madctl = {0: 0x00, 90: 0x60, 180: 0xC0, 270: 0xA0}[self.rotation]
@@ -226,11 +308,11 @@ class SpiDisplay:
     # --------------------------------------------------------------- low-level SPI
 
     def _send_command(self, cmd: int) -> None:
-        _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._dc_gpio}/value", "0")
+        self._dc.set_value(0)
         self._spi.writebytes([cmd & 0xFF])
 
     def _send_data(self, data) -> None:
-        _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._dc_gpio}/value", "1")
+        self._dc.set_value(1)
         self._spi.writebytes(list(data) if isinstance(data, (bytes, bytearray)) else [data & 0xFF])
 
     def _set_full_window(self) -> None:
@@ -244,7 +326,7 @@ class SpiDisplay:
         self._send_data(struct.pack(">HH", self._row_offset, self._row_offset + h - 1))
         # RAMWR — pixel stream follows
         self._send_command(0x2C)
-        _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._dc_gpio}/value", "1")
+        self._dc.set_value(1)
 
     @staticmethod
     def _pil_to_rgb565(image) -> bytearray:
@@ -283,7 +365,14 @@ class SpiDisplay:
             self._thread.join(timeout=2.0)
         # Backlight off
         try:
-            _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._bl_gpio}/value", "0")
+            self._bl.set_value(0)
+        except Exception:
+            pass
+        # Release GPIO lines
+        try:
+            self._dc.cleanup()
+            self._rst.cleanup()
+            self._bl.cleanup()
         except Exception:
             pass
         try:

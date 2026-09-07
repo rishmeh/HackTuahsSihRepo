@@ -129,6 +129,10 @@ python3 -c "from PIL import Image" 2>/dev/null || {
   echo "  Installing python3-pil..."
   apt-get update -qq && apt-get install -y -qq python3-pil
 }
+python3 -c "import gpiod" 2>/dev/null || {
+  echo "  Installing python3-libgpiod..."
+  apt-get update -qq && apt-get install -y -qq python3-libgpiod
+}
 
 echo ""
 echo "=== SPI display setup complete ==="

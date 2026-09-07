@@ -186,7 +186,7 @@ disable_uboot_overlay_hdmi=1
 
 ---
 
-## Problem 5: GPIO 48 (P9_15) ALSO Invalid (UNSOLVED — CURRENT BLOCKER)
+## Problem 5: GPIO 48 (P9_15) ALSO Invalid — ROOT CAUSE FOUND (SOLVED)
 
 **Symptom:** Same error after switching to P9_15 (GPIO 48):
 ```
@@ -194,32 +194,33 @@ export_store: invalid GPIO 48
 OSError: [Errno 22] Invalid argument
 ```
 
-**Status:** This is the CURRENT blocker. GPIO 48 is also reserved by something (possibly eMMC, SPI overlay, or the universal DTB).
+**Initial Theory:** GPIO 48 might be reserved by eMMC. **This was a red herring** — eMMC uses P8 header pins (mmc1_dat*), not GPMC address lines.
 
-**Hypothesis:** On BeagleBone Black with eMMC, many GPIOs in the GPIO1 bank (GPIO 32-63) are reserved for eMMC communication. P9_15 = GPIO1_16 = GPIO 48 may be one of these.
+**Root Cause (identified by Claude):** The **legacy sysfs GPIO interface** (`/sys/class/gpio`) is deprecated and unreliable on kernel 6.12. It's not that GPIO 48 is specifically blocked — it's that the sysfs shim is inconsistent on modern device trees. Some pins (like RST on P9_13/GPIO31 and BL on P9_14/GPIO50) happen to work, while others (like DC on P9_15/GPIO48) don't.
 
-**What we need to find:** A GPIO pin that is:
-1. NOT in HDMI overlay (P9_12, P9_14 area)
-2. NOT in SPI0 overlay (P9_17, P9_18, P9_22)
-3. NOT in PRU servo pins (P9_29, P9_31)
-4. NOT in eMMC control lines
-5. Accessible via `/sys/class/gpio/export` on kernel 6.12
+**Fix:** Replace sysfs GPIO with **libgpiod** (the chardev API). Added `GpioLine` class in `spi_display.py` that:
+1. Automatically detects the correct gpiochip for a GPIO number
+2. Supports both gpiod v1 and v2 APIs
+3. Holds the line open for process lifetime (no release/re-acquire per transaction)
 
-**Potential free pins on BBB P9 header:**
-- P9_11 (GPIO 30) — UART4_RXD, may be free
-- P9_12 (GPIO 60) — HDMI, blocked
-- P9_13 (GPIO 31) — currently used for RST
-- P9_14 (GPIO 50) — currently used for BL
-- P9_15 (GPIO 48) — eMMC, blocked
-- P9_16 (GPIO 51) — eMMC, likely blocked
-- P9_23 (GPIO 49) — may be free
-- P9_24 (GPIO 15) — UART4_TXD, may be free
-- P9_25 (GPIO 117) — eMMC, likely blocked
-- P9_26 (GPIO 14) — UART4_RTS, may be free
-- P9_27 (GPIO 115) — may be free
-- P9_28 (GPIO 113) — SPI1_CS0, may be free
+**Files changed:**
+- `spi_display.py` — replaced all `_gpio_sysfs_write()` calls with `GpioLine` class
+- `scripts/setup_spi_display.sh` — added `python3-libgpiod` to dependency install
 
-**Note:** RST (P9_13, GPIO 31) and BL (P9_14, GPIO 50) are currently working. The issue is specifically with DC/RS.
+**Install on BBB:**
+```bash
+sudo apt install python3-libgpiod
+```
+
+**Verification:**
+```bash
+# Confirm gpiod is installed
+python3 -c "import gpiod; print('OK')"
+
+# Run display test
+cd ~/HackTuahsSihRepo/beaglebone_experiment
+sudo python3 test_spi_display.py
+```
 
 ---
 
