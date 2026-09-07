@@ -244,46 +244,59 @@ echo spi0.0 | sudo tee /sys/bus/spi/drivers/spidev/bind
 - GPIO control working via libgpiod (gpiod v1 API)
 - Backlight turns on/off
 - No errors in Python or kernel logs
+- Panel status register responds (all zeros = no error for ST7789)
 
 **What's NOT working:**
 - No image appears on display
 - Color fill test (solid RED/GREEN/BLUE/WHITE) shows nothing
 - Face rendering test shows nothing
+- ILI9341 init sequence — no image
+- ST7735 init sequence — no image
+- SPI mode 0 — no image
+- SPI mode 3 — no image
+
+**Init Sequences Tried:**
+1. ❌ ST7789 minimal (SWRESET, SLPOUT, COLMOD, MADCTL, INVON, NORON, DISPON)
+2. ❌ ST7789 with full power/gamma (PORCTRL, GCTRL, VCOMS, LCMCTRL, VRHS, etc.)
+3. ❌ ILI9341 with full power/gamma (PWCTR1-3, PWRSEQ, VMCTR1-2, GAMMA+/-)
+4. ❌ ST7735 with full power/gamma (FRMCTR1-3, INVCTR, PWCTR1-5, VMCTR1, GMCTRP1/RN1)
+5. ❌ All sequences with both SPI mode 0 and mode 3
 
 **Possible Causes:**
-1. **Wrong panel type** — panel may not be ST7789. Could be:
-   - ILI9341 (different init sequence, 240×320)
-   - ST7735 (different init sequence, 128×160 or 80×160)
-   - ST7789V (slightly different init)
-   - GC9A01 (SPI but different protocol, 240×240 round)
+1. **Wrong panel type** — panel may not be ST7789, ILI9341, or ST7735. Could be:
+   - GC9A01 (240×240 round, different protocol)
+   - ST7789V (variant with different init)
+   - ILI9340/ILI9342 (variants)
+   - Custom/unknown controller
    
 2. **Wrong wiring** — MOSI/MISO swapped, CS wrong, DC not connected properly
 
-3. **Panel not receiving data** — SCK not toggling, MOSI stuck high/low
+3. **Panel not receiving data correctly** — SCK not toggling, MOSI stuck high/low
 
 4. **Panel is dead** — hardware failure
 
 **Diagnostic Steps Taken:**
 1. ✅ Tested libgpiod GPIO — all pins toggle
 2. ✅ Tested SPI device — opens without error
-3. ❌ Color fill test — display stays black
-4. ❌ Face rendering test — display stays black
+3. ✅ Read panel status register — responds (all zeros)
+4. ❌ Color fill test — display stays black
+5. ❌ Face rendering test — display stays black
+6. ❌ ILI9341 init — display stays black
+7. ❌ ST7735 init — display stays black
+8. ❌ SPI mode 0 and 3 — display stays black
 
 **Next Diagnostic Steps:**
-1. **Run pin-by-pin test** (`test_display_pins.py`) — verify each GPIO toggles
-2. **Run communication test** (`test_display_comm.py`) — read panel status registers
-3. **Check panel markings** — look for IC markings on the panel PCB
-4. **Try different init sequences** — if panel is ILI9341 or ST7735, need different init
-5. **Check MOSI with multimeter/LED** — verify data is actually being sent
+1. **Check panel markings** — look for IC markings on the panel PCB
+2. **Try different wiring** — swap MOSI/SCK, try different CS pin
+3. **Try GC9A01 init** — if panel is round, it's likely GC9A01
+4. **Check if panel needs 3.3V or 5V logic** — some panels need 3.3V, some 5V
+5. **Try slower SPI speed** — 1 MHz instead of 40 MHz
 
 **Diagnostic Commands to Run:**
 ```bash
-# Test 1: Pin-by-pin
+# Test all init sequences
 cd ~/HackTuahsSihRepo/beaglebone_experiment
-sudo python3 test_display_pins.py
-
-# Test 2: Communication (reads panel status)
-sudo python3 test_display_comm.py
+sudo python3 test_display_all.py
 ```
 
 ---
