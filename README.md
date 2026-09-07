@@ -3,13 +3,17 @@
 > **Smart India Hackathon 2026** | Problem Statement: SIH26224 — Student Innovation  
 > **Theme:** Smart Education | **Category:** Hardware | **Team:** HackTuah
 
+Startup instructions: [START_ROBOT.md](START_ROBOT.md)
+
+Wiring and power: [hardware/CONNECTIONS.md](hardware/CONNECTIONS.md)
+
 ![Smart India Hackathon 2026](https://sih.gov.in/)
 
 ---
 
 ## Overview
 
-**Table Tot** is an AI-powered desk companion robot that lives on a student's study desk. It learns the student's routine and study patterns, then builds personalised productivity workflows around them. Built around a Raspberry Pi with a camera, microphone, speaker, servos and an animated face — all in one desk-sized body.
+**Table Tot** is an AI-powered desk companion robot that lives on a student's study desk. It learns the student's routine and study patterns, then builds personalised productivity workflows around them. A laptop runs every model and application service and uses its own microphone and speakers. A Raspberry Pi 5 inside the robot handles the camera, animated-face display and two servos.
 
 ---
 
@@ -28,13 +32,13 @@ Students today face three unresolved challenges:
 ## Innovation & Uniqueness
 
 ### Offline-First by Design
-A small language model on the Pi answers questions and builds quizzes offline, and decides when a cloud LLM is really needed. A student in a hostel with no WiFi still gets a full study session, quizzes included.
+A small language model on the laptop answers questions and builds quizzes offline, and decides when a cloud LLM is really needed. The Pi and laptop only need a local wired or Wi-Fi network; internet access is optional.
 
 ### Age and Psychology Adaptive
 Difficulty, prompts, tone and personality adjust to the student's developmental stage and observed study patterns. A 9-year-old gets playful story prompts; a Class 12 student gets exam-style drills.
 
 ### Multi-Modal Interaction
-Voice, gesture control, face recognition and proximity sensing give a hands-free, natural way to study. Raise a palm to pause the timer; Tot wakes up when the student sits down.
+Voice through the laptop, camera-based gesture control and face recognition give a hands-free way to study. Raise a palm to pause the timer; the camera recognizes when the student sits down.
 
 ### Dynamic Personality
 Friend, teacher or detective personas, plus an expressive animated face, keep engagement fresh across age groups. Detective mode turns a history chapter into clues to solve.
@@ -53,9 +57,9 @@ Friend, teacher or detective personas, plus an expressive animated face, keep en
 
 ### Smart Interaction
 - Voice input and spoken replies
-- Face recognition and proximity sensing
+- Face recognition from the Pi camera
 - Gesture control for hands-free use
-- Animated face and dynamic screens
+- Laptop dashboard and robot-status display
 - Servo-driven head and body movement
 - Student persona and pattern tracking
 
@@ -78,7 +82,7 @@ Friend, teacher or detective personas, plus an expressive animated face, keep en
 
 ## A Study Session with Table Tot
 
-1. **Student sits down** — PIR wakes Tot, face recognised, persona loaded
+1. **Student sits down** — Pi camera frames reach the laptop, the face is recognised and the persona loads
 2. **Plan the session** — Today's to-dos, syllabus and due homework
 3. **Focus block** — Pomodoro timer, posture and hydration nudges
 4. **Active recall break** — Voice quiz from the student's own notes
@@ -112,7 +116,7 @@ Friend, teacher or detective personas, plus an expressive animated face, keep en
 |---|
 | Timers, alarms, calendar, to-do |
 | On-device SLM: Q&A and quizzes |
-| Moonshine STT and Kokoro TTS |
+| Moonshine STT and Piper TTS on the laptop |
 | Face detection (YuNet) |
 | Wellness reminders |
 | Scheduling, persona, KPIs |
@@ -140,13 +144,13 @@ Friend, teacher or detective personas, plus an expressive animated face, keep en
 
 | Component | Role |
 |---|---|
-| Raspberry Pi 5 (4 GB) | Main compute |
-| BeagleBone | Development board |
+| Laptop | All AI, application, database and dashboard computation |
+| Raspberry Pi 5 (4 GB) | Camera, face-display and servo bridge |
 | 2 × Servos | Head and body movement |
 | Camera module | Face, gesture, OCR |
-| IPS display | Animated face and UI |
-| USB mic + speaker | Voice in and out |
-| PIR motion sensor | Presence detection |
+| Laptop microphone + speakers | Voice input and spoken replies |
+| HDMI IPS display | Animated robot face, driven by the Pi |
+| Laptop screen | Parent dashboard and diagnostics |
 
 > Pi, servos and camera are already in hand. BOM stays affordable.
 
@@ -155,39 +159,35 @@ Friend, teacher or detective personas, plus an expressive animated face, keep en
 | Layer | Technology |
 |---|---|
 | Language | Python |
-| Backend | FastAPI — REST + WebSocket server on the Pi |
+| Backend | FastAPI on the laptop; HTTP bridge to the Pi |
 | Database | SQLite — offline-first, zero-setup local DB |
 | Vision | OpenCV |
-| Offline Speech | Moonshine (STT) + Kokoro (TTS) |
-| Display | C / C++ — local on-robot display |
+| Offline Speech | Moonshine (STT) + Piper (TTS), both on the laptop |
 | Dashboard | React + Vite — parent dashboard over WiFi |
-| On-Device SLM | Qwen via llama.cpp |
+| Local SLM | Qwen through Ollama on the laptop |
 | Ingestion | pdfplumber, Tesseract, FFmpeg, Whisper |
 
-### Voice Pipeline: On-Device SLM First, Cloud LLM Only When Needed
+### Voice Pipeline: Laptop SLM First, Cloud LLM Only When Needed
 
 ```
-PIR detects presence
-    ↓
 Wake word detection (openWakeWord)
     ↓
 Speech-to-text: Moonshine (offline) / Whisper (online)
     ↓
 Intent router
     ↓
-SLM on device → cloud LLM if needed
+SLM on laptop → cloud LLM if needed
     ↓
-Text-to-speech: Kokoro (offline) / ElevenLabs (online)
+Text-to-speech: Piper on the laptop
     ↓
-Speaker + face animation
+Laptop speaker + Pi servo command
 ```
 
-### On-Device Models
+### Laptop Models
 
 | Model | Purpose |
 |---|---|
-| Kokoro-82M | TTS (primary) |
-| Piper | TTS fallback |
+| Piper | TTS |
 | Moonshine | STT |
 | openWakeWord | Wake word detection |
 | Silero VAD | Voice activity detection |
@@ -203,30 +203,23 @@ Speaker + face animation
 ## System Architecture
 
 ```
-INPUTS                          RASPBERRY PI 5                    OUTPUTS
-──────────────────────────────────────────────────────────────────────────
-Microphone  ──voice commands──▶  FastAPI backend,                Display ──animated
-Camera Module ──face, gesture,     all processing on-device     face + UI
-              OCR────────────▶                              Speaker ──TTS
-PIR Sensor  ──presence────▶     STT / TTS engine              Servos ──head and
-Display     ──taps, swipes──▶   Vision (OpenCV)                     body motion
-                                On-device SLM (llama.cpp)         (PWM)
-                                Scheduler and timers
-                                SQLite database
-                                Student persona model
-──────────────────────────────────────────────────────────────────────────
-                                audio / video / signal / touch
-──────────────────────────────────────────────────────────────────────────
-PARENT DASHBOARD
-React + Vite web app on any laptop or phone browser
-KPI charts, study insights, uploads, parental controls
-local WiFi, REST API + WebSocket
-No cloud dependency
+ROBOT / RASPBERRY PI 5                  LAPTOP
+────────────────────────────────────────────────────────────────────
+Camera ──JPEG over HTTP───────────────▶ YuNet + SFace recognition
+
+Servos ◀──versioned JSON state───────── Robot state machine
+Display ◀──versioned face state──────── FastAPI application services
+                                        Laptop microphone + Moonshine
+                                        Piper + laptop speakers
+                                        Ollama SLM, SQLite, dashboard
+────────────────────────────────────────────────────────────────────
+             trusted LAN, laptop TCP port 8000
 ```
 
-- Sensors, the language model and every record live on the Pi. The cloud is called only for hard questions.
-- **Live state over WebSocket:** Face expression, listening status and timer state stream to the dashboard in real time.
-- **Escalation router:** Query scrubber + cloud API.
+- Personal records, models and audio stay on the laptop. The Pi retains no face image and renders the animated face locally from state names.
+- The dashboard and Pi use the laptop FastAPI service on the local network.
+- Camera transfer and servo return commands are documented in `hardware/DATA_FLOW.md`.
+- The query scrubber is the only path to an optional cloud model.
 
 ---
 
@@ -236,9 +229,9 @@ No cloud dependency
 
 - **Affordable:** Total bill of materials per unit is low; all parts are off-the-shelf and commercially available.
 - **Parts in hand:** Pi, camera and servos already available.
-- **Fully open-source stack:** Python, FastAPI, OpenCV, Moonshine, Kokoro, llama.cpp, React.
+- **Fully open-source stack:** Python, FastAPI, OpenCV, Moonshine, Piper, Ollama and React.
 - **Huge Pi community:** Documented drivers for every peripheral used.
-- **Works without internet:** The on-device SLM answers everyday questions offline.
+- **Works without internet:** The laptop SLM answers everyday questions offline while the Pi and laptop communicate over the LAN.
 - **Own it forever:** The local SLM is a one-time cost, while cloud API bills compound over time.
 
 | Metric | Value |
@@ -250,10 +243,10 @@ No cloud dependency
 
 | Challenge | Strategy |
 |---|---|
-| **Compute limits on Pi 5** — Vision, STT, TTS and the SLM compete for CPU | Lightweight models: YuNet and SFace for vision, Moonshine for speech, a 0.8B 4-bit SLM; heavy jobs run on demand |
+| **Laptop availability** — the robot depends on its paired laptop | Reserve stable LAN addresses and start the laptop service before a study session |
 | **Voice latency offline** — Local STT / TTS is slower than cloud | Wake-word gating: listen for the wake word only, then stream short utterances; pre-cache common replies |
-| **Child data privacy** — Face, voice and study patterns are sensitive, cloud APIs see every query | On-device by default: scheduling and persona modelling stay on the Pi; cloud queries are anonymised first; dashboard is local-network only |
-| **Heat and power** — Sustained load inside an enclosure throttles the Pi | Thermal design: heatsink plus fan, vented shell, duty-cycled servos instead of continuous hold |
+| **Child data privacy** — Face, voice and study patterns are sensitive | Keep records and models on the laptop, discard Pi capture buffers, and anonymise optional cloud queries |
+| **Servo power noise** — servo current spikes can reset the Pi | Separate regulated servo supply, common ground and bulk capacitance near the servos |
 
 ---
 
@@ -282,7 +275,7 @@ No cloud dependency
 | Bridges the parent-student gap with insight, not surveillance |
 | Physical, expressive companion supports students who study alone |
 | Group and competitive modes encourage peer learning |
-| Works in Hindi and regional languages through Moonshine and Kokoro |
+| Laptop microphone supports hands-free study interaction |
 
 > **Impact:** Trust between parents and students
 
@@ -324,10 +317,9 @@ No cloud dependency
 
 - **Qwen3.** Alibaba. Open-weight small language models for on-device use. [github.com/QwenLM/Qwen3](https://github.com/QwenLM/Qwen3)
 - **llama.cpp.** Quantised LLM inference in C/C++ on CPU. [github.com/ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
-- **Kokoro-82M.** Open-weight neural TTS, 82M parameters, 8 languages. [huggingface.co/hexgrad/Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)
 - **Moonshine.** Useful Sensors. Real-time on-device speech recognition. [github.com/usefulsensors/moonshine](https://github.com/usefulsensors/moonshine)
 - **OpenCV Zoo.** YuNet face detection and SFace face recognition. [github.com/opencv/opencv_zoo](https://github.com/opencv/opencv_zoo)
-- **piper-tts.** Rhasspy. Fast neural TTS fallback for Raspberry Pi. [github.com/rhasspy/piper](https://github.com/rhasspy/piper)
+- **piper-tts.** Rhasspy. Local neural TTS used on the laptop. [github.com/rhasspy/piper](https://github.com/rhasspy/piper)
 - **Raspberry Pi docs.** Camera, GPIO and PWM servo control. [raspberrypi.com/documentation](https://raspberrypi.com/documentation)
 
 ### Comparable Products
@@ -345,8 +337,13 @@ No cloud dependency
 
 ```
 HackTuahsSihRepo/
-├── SIH2026-Presentation-HackTuah-TableTot.pptx  # Original SIH presentation
-└── README.md                                      # This file
+├── dashboard/      # React/Vite dashboard and local Node server
+├── hardware/       # Raspberry Pi capture and actuator bridge
+├── learner/        # onboarding profile and policy
+├── ml/             # laptop FastAPI, chat, quiz, voice and TTS
+├── persona/        # response personality
+├── vision/         # laptop face detection and recognition
+└── SIH2026-Presentation-HackTuah-TableTot.pptx
 ```
 
 ---

@@ -11,6 +11,8 @@ Uses:
 import os
 import sys
 import queue
+import time
+from contextlib import contextmanager
 import urllib.request
 import warnings
 import numpy as np
@@ -123,6 +125,8 @@ VAD_THRESHOLD = 500  # RMS energy threshold to consider as speech
 SILENCE_DURATION = 1.5  # Seconds of silence to trigger STT
 
 audio_queue = queue.Queue()
+API_BASE_URL = os.getenv("ML_API_URL", "http://127.0.0.1:8000").rstrip("/")
+CURRENT_STUDENT_ID = None
 
 def audio_callback(indata, frames, time, status):
     if status:
@@ -148,9 +152,72 @@ def speak_text(text: str):
         
     audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
     
-    # Play synchronously (Piper lessac-medium is 22050 Hz)
     sd.play(audio_array, samplerate=22050)
     sd.wait()
+
+
+def set_robot_state(state: str) -> None:
+    """Keep the Pi servos synchronized with laptop voice work."""
+    try:
+        requests.post(
+            f"{API_BASE_URL}/hardware/control",
+            json={"face_state": state, "servo_state": state},
+            timeout=2,
+        )
+    except requests.RequestException:
+        pass
+
+
+@contextmanager
+def audio_source():
+    """Yield PCM chunks captured directly from the laptop microphone."""
+    with sd.InputStream(
+        samplerate=RATE,
+        channels=1,
+        dtype="int16",
+        blocksize=CHUNK,
+        callback=audio_callback,
+    ):
+        yield audio_queue.get
+
+
+def handle_robot_event() -> None:
+    """Speak face-recognition greetings through the laptop speaker."""
+    global CURRENT_STUDENT_ID
+    try:
+        response = requests.get(f"{API_BASE_URL}/hardware/events", timeout=0.2)
+        if response.status_code == 204:
+            return
+        response.raise_for_status()
+        event = response.json()
+    except requests.RequestException:
+        return
+
+    if event.get("event") == "departed":
+        CURRENT_STUDENT_ID = None
+        return
+    if event.get("event") != "arrived" or not event.get("student_id"):
+        return
+    CURRENT_STUDENT_ID = str(event["student_id"])
+
+    # The recognition command already started the happy/nod gesture on the Pi.
+    time.sleep(0.85)
+    try:
+        greeting = requests.post(
+            f"{API_BASE_URL}/hardware/greet",
+            json={"student_id": event["student_id"]},
+            timeout=120,
+        )
+        greeting.raise_for_status()
+        set_robot_state("speaking")
+        speak_text(greeting.json().get("answer", "Hello!"))
+    except requests.RequestException:
+        set_robot_state("speaking")
+        speak_text("Hello!")
+    finally:
+        set_robot_state("idle")
+        while not audio_queue.empty():
+            audio_queue.get()
 
 # ---------------------------------------------------------
 # 6. Filler lines while the backend is processing come from the persona's
@@ -160,7 +227,7 @@ def speak_text(text: str):
 # ---------------------------------------------------------
 # 7. Main Loop
 # ---------------------------------------------------------
-API_URL = "http://127.0.0.1:8000/chat"
+API_URL = f"{API_BASE_URL}/chat"
 SESSION_ID = "voice-session-1"
 
 def main():
@@ -174,9 +241,11 @@ def main():
     silence_frames = 0
     max_silence_frames = int(RATE / CHUNK * SILENCE_DURATION)
     
-    with sd.InputStream(samplerate=RATE, channels=1, dtype='int16', blocksize=CHUNK, callback=audio_callback):
+    print("Audio input: laptop microphone; audio output: laptop speaker")
+    with audio_source() as next_chunk:
         while True:
-            chunk = audio_queue.get()
+            chunk = next_chunk()
+            handle_robot_event()
             
             if state == "WAKEWORD":
                 prediction = oww_model.predict(chunk.flatten())
@@ -184,11 +253,16 @@ def main():
                 # Check if wakeword confidence exceeds threshold
                 confidence = 0.0
                 for model_name, score in prediction.items():
-                    if score > 0.5:
-                        confidence = score
+                    del model_name
+                    # openWakeWord versions return either a scalar or a
+                    # one-element ndarray. Normalise both before comparison.
+                    score_value = float(np.max(score))
+                    if score_value > confidence:
+                        confidence = score_value
                 
                 if confidence > 0.5:
                     print("\n[Wakeword Detected! Listening...]")
+                    set_robot_state("listening")
                     speak_text(_say("listening", Situation.LISTENING))
                     
                     state = "RECORDING"
@@ -213,6 +287,7 @@ def main():
                 if silence_frames > max_silence_frames:
                     print("[Silence detected, processing speech...]")
                     state = "PROCESSING"
+                    set_robot_state("thinking")
                     
                     full_audio = np.concatenate(recorded_frames, axis=0).flatten()
                     float_audio = full_audio.astype(np.float32) / 32768.0
@@ -247,6 +322,7 @@ def main():
                                         "interests": [],
                                         "language_level": "intermediate"
                                     },
+                                    "student_id": CURRENT_STUDENT_ID,
                                     "session_id": SESSION_ID
                                 }
 
@@ -256,6 +332,7 @@ def main():
                                         body = response.json()
                                         answer = body.get("answer", "No answer found.")
                                         # 4. TTS — speak the answer
+                                        set_robot_state("speaking")
                                         speak_text(answer)
                                     else:
                                         print(f"API Error: {response.status_code} - {response.text}")
@@ -270,6 +347,7 @@ def main():
                         print("Audio too short, ignoring.")
                         
                     print("\nReturning to wakeword mode. Say 'Hey Jarvis' to wake it up.")
+                    set_robot_state("idle")
                     state = "WAKEWORD"
                     oww_model.reset()
                     
