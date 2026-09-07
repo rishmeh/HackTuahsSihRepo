@@ -361,6 +361,90 @@ Panel BL    → P9_14 (GPIO 50)
 
 ---
 
+## For Other AIs Helping With This Project
+
+### Architecture Summary
+
+The system is a **dual-machine robot**:
+- **Laptop** = brain (face recognition, voice, chat, all AI inference)
+- **BeagleBone Black** = peripheral bridge (camera capture, SPI display, servo control)
+
+The BBB does NO AI work. It only:
+1. Captures JPEG frames from USB camera, uploads to laptop via HTTP
+2. Receives face state commands from laptop, renders emotions on ST7789 SPI display
+3. Receives servo commands, drives PRU0 PWM for 2 servos
+
+### Current Blocker
+
+**Display stays black despite:**
+- SPI device exists and opens without error
+- GPIO control works via libgpiod
+- Panel status register responds (all zeros = ST7789 "no error" state)
+- Multiple init sequences tried: ST7789 (minimal + full power/gamma), ILI9341 (full), ST7735 (full)
+- Both SPI mode 0 and mode 3 tried
+- Backlight turns on/off
+
+### Most Likely Causes (in order of probability)
+
+1. **Wrong panel type** — The panel is labeled as "ST7789" but may actually be:
+   - GC9A01 (240×240 round, different init, needs 0x28 DISPON after 0x11 SLPOUT)
+   - ST7789V (variant with slightly different power sequencing)
+   - ILI9340/ILI9342 (ILI9341 variants)
+   - The PCB markings should identify the actual controller
+
+2. **Wrong wiring** — The 4-wire SPI connection may have:
+   - MOSI/MISO swapped (SDA on panel may expect data in different order)
+   - CS pin not actually connected to P9_17
+   - DC pin not connected to P9_15
+   - SCK not connected to P9_22
+
+3. **SPI data not reaching panel** — The SCK/MOSI lines may not be toggling despite software saying it is. This could be caused by:
+   - Pinmux not actually configured for SPI (overlay loaded but pins not muxed)
+   - Short circuit or open circuit in wiring
+   - Panel not actually receiving 3.3V logic levels
+
+4. **Panel is dead** — Hardware failure
+
+### How to Contribute
+
+If you know how to fix this, focus on:
+1. **Identifying the panel type** — Look at PCB markings, FPC cable markings, or the display's silk screen
+2. **Verifying SPI signal integrity** — Check if SCK/MOSI actually toggle (oscoscope/logic analyzer best, LED on MOSI pin works)
+3. **Trying alternative wiring** — Especially swapping MOSI/SCK or trying different CS pins
+4. **Trying GC9A01 init** — If the panel is round, it's almost certainly GC9A01
+
+### Environment
+
+- **BBB Kernel:** 6.12.28-bone25
+- **Debian:** 12 (bookworm)
+- **Python:** 3.11
+- **SPI:** spidev (kernel module)
+- **GPIO:** libgpiod (python3-libgpiod 1.6.3, v1 API)
+- **PIL:** python3-pil
+
+### Files of Interest
+
+- `beaglebone_experiment/spi_display.py` — Main display driver (Pillow renderer)
+- `beaglebone_experiment/test_display_all.py` — Comprehensive init sequence tester
+- `beaglebone_experiment/test_display_comm.py` — SPI communication tester
+- `beaglebone_experiment/SETUP_LOG.md` — Full setup history
+
+### Hardware
+
+```
+ST7789 240x240 SPI IPS Panel (8-pin)
+  VCC → P9_3 (3.3V)
+  GND → P9_1
+  SCK → P9_22 (SPI0_SCLK)
+  SDA → P9_18 (SPI0_D1/MOSI)
+  RES → P9_13 (GPIO 31)
+  DC  → P9_15 (GPIO 48)
+  CS  → P9_17 (SPI0_CS0)
+  BL  → P9_14 (GPIO 50)
+```
+
+---
+
 ## Lessons Learned
 
 1. BBB has TWO uEnv.txt files — only `/boot/uEnv.txt` is read by bootloader.
