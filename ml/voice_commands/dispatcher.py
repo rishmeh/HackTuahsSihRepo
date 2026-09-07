@@ -66,6 +66,22 @@ def dispatch(intent: Intent, profile_id: int = 0) -> Optional[str]:
             logger.warning("Alarm creation failed: %s", e)
         return "Sorry, I couldn't set the alarm."
 
+    if n == "create_task":
+        title = intent.params.get("title", "").strip()
+        if not title:
+            return "What should I call the task?"
+        try:
+            r = requests.post(
+                f"{ML_BASE}/tasks_proxy/{profile_id}",
+                json={"title": title},
+                timeout=5,
+            )
+            if r.ok:
+                return f"Done! I've added '{title}' to your to-do list."
+        except Exception as e:
+            logger.warning("Create task failed: %s", e)
+        return "Sorry, I couldn't add the task right now."
+
     if n == "add_note":
         content = intent.params["content"]
         try:

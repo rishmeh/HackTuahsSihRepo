@@ -35,6 +35,7 @@ _WORD_NUM_PAT = "|".join(
     re.escape(k) for k in sorted(_WORD_TO_NUM, key=len, reverse=True)
 )
 
+
 def _to_num(s: str) -> float:
     s = s.strip().lower()
     if re.fullmatch(r"\d+(\.\d+)?", s):
@@ -43,7 +44,7 @@ def _to_num(s: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Alarm time helpers — understand "seven thirty", "half past nine", etc.
+# Alarm time helpers
 # ---------------------------------------------------------------------------
 
 _HOUR_WORDS = {
@@ -59,24 +60,24 @@ _MINUTE_WORDS = {
 
 
 # ---------------------------------------------------------------------------
-# CREATE intents
+# CREATE intents — timer, alarm, note, task
 # ---------------------------------------------------------------------------
 
-_NUM_PAT = rf"(\d+|{_WORD_NUM_PAT})"
+_NUM_PAT  = rf"(\d+|{_WORD_NUM_PAT})"
 _UNIT_PAT = r"(hour|hr|minute|min|second|sec)s?"
 
 _TIMER = re.compile(
     rf"(?:set|start|create|put)\s+(?:a\s+)?timer\s+for\s+{_NUM_PAT}\s*{_UNIT_PAT}",
     re.I,
 )
-# Also catch "timer: ten minutes" or "ten minute timer"
 _TIMER_ALT = re.compile(
     rf"{_NUM_PAT}\s*[- ]?{_UNIT_PAT}\s+timer",
     re.I,
 )
 
 _ALARM_DIGIT = re.compile(
-    r"(?:set|create|add|wake\s+me(?:\s+up)?)\s+(?:an?\s+)?alarm\s+(?:at|for)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?",
+    r"(?:set|create|add|wake\s+me(?:\s+up)?)\s+(?:an?\s+)?alarm\s+(?:at|for)?\s*"
+    r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?",
     re.I,
 )
 _ALARM_WORD = re.compile(
@@ -87,19 +88,30 @@ _ALARM_WORD = re.compile(
     re.I,
 )
 
-_WEATHER = re.compile(
-    r"weather\s+(?:in|for|today)|what(?:'s|s| is)\s+the\s+weather|how(?:'s|s| is)\s+the\s+weather",
+# Note — broad set of verbs: write, jot, save, add, create, record, note
+_NOTE = re.compile(
+    # "add/write/save/jot/create/record a note: ..."
+    r"(?:add|take|save|make|create|write|jot|record|put\s+(?:a\s+)?note)\s+(?:a?\s*)?(?:note|reminder)?[:\s]+(.+)"
+    # "write/add/put in/to my notes: ..."
+    r"|(?:write|add|put|save)\s+(?:(?:this\s+)?(?:in|to|into|on)\s+)?(?:my\s+)?notes?[,:\s]+(.+)"
+    # "note that/this ..."  "jot this down: ..."
+    r"|(?:note|remember)\s+(?:this\s+)?(?:down\s+)?(?:that\s+)?(.+)",
     re.I,
 )
-_LOCATION = re.compile(
-    r"(?:weather\s+(?:in|for|at)|in|at|for)\s+([A-Za-z][A-Za-z\s]{1,40}?)(?:\?|$|\.|,)",
+
+# Task creation — "add a task to call mom", "remind me to buy milk", etc.
+# Checked AFTER list_tasks so "what tasks do I have" doesn't match here.
+_CREATE_TASK = re.compile(
+    # "add/create/make a task: ..." or "add a to-do for ..."
+    r"(?:add|create|make|set)\s+(?:a?\s*)?(?:new\s+)?(?:task|to-?do|todo|item|reminder)\s+"
+    r"(?:for\s+|to\s+|called\s+|about\s+)?(?:to\s+)?(.+)"
+    # "remind me to ..."
+    r"|remind\s+me\s+to\s+(.+)"
+    # "do it for me, set a to-do ..."  — catch trailing task description
+    r"|do\s+it\s+for\s+me[,\s]+(?:set|add|create)\s+(?:a?\s*)?(?:task|to-?do|todo)[:\s]+(.+)",
     re.I,
 )
-_TIME = re.compile(
-    r"what(?:'s|s| is)\s+the\s+(?:current\s+)?time|time\s+(?:is\s+it|now)|current\s+time",
-    re.I,
-)
-_NOTE = re.compile(r"(?:add|take|save|make|create)\s+a?\s*note[:\s]+(.+)", re.I)
+
 
 # ---------------------------------------------------------------------------
 # LIST / QUERY intents
@@ -109,78 +121,36 @@ _LIST_TIMERS = re.compile(
     r"(?:what|show|list|tell\s+me|check|do\s+i\s+have)\s+(?:my\s+)?timers?"
     r"|list\s+(?:all\s+)?timers?"
     r"|what\s+timers?\s+(?:do\s+i\s+have|are\s+(?:there|running|set))", re.I)
+
 _LIST_ALARMS = re.compile(
     r"(?:what|show|list|tell\s+me|check|do\s+i\s+have)\s+(?:my\s+)?alarms?"
     r"|list\s+(?:all\s+)?alarms?"
     r"|what\s+alarms?\s+(?:do\s+i\s+have|are\s+(?:there|set))", re.I)
+
 _LIST_NOTES = re.compile(
     r"(?:what|show|list|tell\s+me|read|check|do\s+i\s+have)\s+(?:my\s+)?notes?"
     r"|list\s+(?:all\s+)?(?:my\s+)?notes?"
     r"|what\s+notes?\s+(?:do\s+i\s+have|are\s+there)", re.I)
+
 _LIST_TASKS = re.compile(
     r"(?:what|show|list|tell\s+me|check|do\s+i\s+have)\s+(?:my\s+)?(?:tasks?|to-?dos?|to-?do\s+list)"
     r"|list\s+(?:all\s+)?(?:my\s+)?(?:tasks?|to-?dos?)"
     r"|what(?:'s| is)\s+on\s+my\s+(?:to-?do|task)(?:\s+list)?"
     r"|(?:tasks?|to-?dos?)\s+(?:do\s+i\s+have|are\s+(?:there|pending))", re.I)
 
+_WEATHER = re.compile(
+    r"weather\s+(?:in|for|today)|what(?:'s|s| is)\s+the\s+weather|how(?:'s|s| is)\s+the\s+weather",
+    re.I)
+_LOCATION = re.compile(
+    r"(?:weather\s+(?:in|for|at)|in|at|for)\s+([A-Za-z][A-Za-z\s]{1,40}?)(?:\?|$|\.|,)", re.I)
+
+_TIME = re.compile(
+    r"what(?:'s|s| is)\s+the\s+(?:current\s+)?time|time\s+(?:is\s+it|now)|current\s+time", re.I)
+
 
 # ---------------------------------------------------------------------------
-# Public API
+# Helpers
 # ---------------------------------------------------------------------------
-
-def parse(text: str) -> Intent:
-    """
-    Parse a voice utterance into a structured Intent.
-    Returns Intent("unknown") when no pattern matches — caller should then
-    try the LLM router before falling through to the full chat pipeline.
-    """
-    # ── List queries (check before create to avoid false matches) ────────────
-    if _LIST_TIMERS.search(text): return Intent("list_timers")
-    if _LIST_ALARMS.search(text): return Intent("list_alarms")
-    if _LIST_NOTES.search(text):  return Intent("list_notes")
-    if _LIST_TASKS.search(text):  return Intent("list_tasks")
-
-    # ── Instant lookups ───────────────────────────────────────────────────────
-    if _TIME.search(text):
-        return Intent("get_time")
-
-    if _WEATHER.search(text):
-        loc_m = _LOCATION.search(text)
-        return Intent("get_weather", {"location": loc_m.group(1).strip() if loc_m else ""})
-
-    # ── Timer (digit or word) ────────────────────────────────────────────────
-    m = _TIMER.search(text) or _TIMER_ALT.search(text)
-    if m:
-        raw, unit = m.group(1), m.group(2).lower()
-        amount = _to_num(raw)
-        multipliers = {"hour": 3600, "hr": 3600, "minute": 60, "min": 60, "second": 1, "sec": 1}
-        secs = int(amount * multipliers[unit])
-        label = f"{raw} {unit} timer"
-        return Intent("set_timer", {"duration_seconds": secs, "label": label})
-
-    # ── Alarm (digit) ─────────────────────────────────────────────────────────
-    m = _ALARM_DIGIT.search(text)
-    if m:
-        h, mn, mer = int(m.group(1)), int(m.group(2) or 0), (m.group(3) or "").lower()
-        h, mn = _apply_meridiem(h, mn, mer)
-        return _alarm_intent(h, mn)
-
-    # ── Alarm (word) ──────────────────────────────────────────────────────────
-    m = _ALARM_WORD.search(text)
-    if m:
-        h = _HOUR_WORDS.get(m.group(1).lower(), 7)
-        mn = _MINUTE_WORDS.get((m.group(2) or "").lower().strip(), 0)
-        mer = (m.group(3) or "").lower()
-        h, mn = _apply_meridiem(h, mn, mer)
-        return _alarm_intent(h, mn)
-
-    # ── Note ──────────────────────────────────────────────────────────────────
-    m = _NOTE.search(text)
-    if m:
-        return Intent("add_note", {"content": m.group(1).strip()})
-
-    return Intent("unknown")
-
 
 def _apply_meridiem(h: int, mn: int, mer: str) -> tuple[int, int]:
     if mer == "pm" and h != 12: h += 12
@@ -193,3 +163,74 @@ def _alarm_intent(h: int, mn: int) -> Intent:
     if target <= datetime.now():
         target += timedelta(days=1)
     return Intent("set_alarm", {"target_at": target.isoformat(), "label": f"Alarm at {h:02d}:{mn:02d}"})
+
+
+def _first_group(m: re.Match) -> str:
+    """Return the first non-None captured group, stripped."""
+    for g in m.groups():
+        if g is not None:
+            return g.strip()
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def parse(text: str) -> Intent:
+    """
+    Parse a voice utterance into a structured Intent.
+    Returns Intent("unknown") when no pattern matches — caller should then
+    try the LLM router before falling through to the full chat pipeline.
+    """
+    # ── List queries (check before create to avoid false matches) ─────────────
+    if _LIST_TIMERS.search(text): return Intent("list_timers")
+    if _LIST_ALARMS.search(text): return Intent("list_alarms")
+    if _LIST_NOTES.search(text):  return Intent("list_notes")
+    if _LIST_TASKS.search(text):  return Intent("list_tasks")
+
+    # ── Instant lookups ────────────────────────────────────────────────────────
+    if _TIME.search(text):
+        return Intent("get_time")
+
+    if _WEATHER.search(text):
+        loc_m = _LOCATION.search(text)
+        return Intent("get_weather", {"location": loc_m.group(1).strip() if loc_m else ""})
+
+    # ── Timer ──────────────────────────────────────────────────────────────────
+    m = _TIMER.search(text) or _TIMER_ALT.search(text)
+    if m:
+        raw, unit = m.group(1), m.group(2).lower()
+        amount = _to_num(raw)
+        multipliers = {"hour": 3600, "hr": 3600, "minute": 60, "min": 60, "second": 1, "sec": 1}
+        secs = int(amount * multipliers[unit])
+        return Intent("set_timer", {"duration_seconds": secs, "label": f"{raw} {unit} timer"})
+
+    # ── Alarm ──────────────────────────────────────────────────────────────────
+    m = _ALARM_DIGIT.search(text)
+    if m:
+        h, mn, mer = int(m.group(1)), int(m.group(2) or 0), (m.group(3) or "").lower()
+        return _alarm_intent(*_apply_meridiem(h, mn, mer))
+
+    m = _ALARM_WORD.search(text)
+    if m:
+        h  = _HOUR_WORDS.get(m.group(1).lower(), 7)
+        mn = _MINUTE_WORDS.get((m.group(2) or "").lower().strip(), 0)
+        mer = (m.group(3) or "").lower()
+        return _alarm_intent(*_apply_meridiem(h, mn, mer))
+
+    # ── Note ───────────────────────────────────────────────────────────────────
+    m = _NOTE.search(text)
+    if m:
+        content = _first_group(m)
+        if content:
+            return Intent("add_note", {"content": content})
+
+    # ── Create task ────────────────────────────────────────────────────────────
+    m = _CREATE_TASK.search(text)
+    if m:
+        title = _first_group(m)
+        if title:
+            return Intent("create_task", {"title": title})
+
+    return Intent("unknown")
