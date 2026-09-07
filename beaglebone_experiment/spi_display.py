@@ -6,7 +6,7 @@ drop-in replacement — the BBB experiment shows the face on the small SPI scree
 instead of HDMI.
 
 Wiring (BBB P9 header, SPI0). These pins are chosen because they do NOT collide
-with the PRU servo pins P9_29 / P9_31:
+with the PRU servo pins P9_29 / P9_31 or HDMI:
 
   Panel pin | BBB P9 pin | Function
   ----------|------------|----------
@@ -15,7 +15,7 @@ with the PRU servo pins P9_29 / P9_31:
   SCL/SCK   | P9_22                        — SPI0_SCLK
   SDA/MOSI  | P9_18                        — SPI0_D1 (data out from BBB)
   RES/RST   | P9_13                        — GPIO (data/command select)
-  DC/RS     | P9_12                        — GPIO (reset)
+  DC/RS     | P9_15                        — GPIO (P9_12 conflicts with HDMI)
   CS        | P9_17                        — SPI0_CS0 (hardware chip select)
   BL/LED    | P9_14 (GPIO) or tie to VCC  — backlight (optional)
 """
@@ -43,8 +43,9 @@ BLUE = (0, 150, 255)
 PINK = (255, 100, 150)
 
 # BBB P9 GPIO numbers (Linux sysfs numbering: bank * 32 + pin_in_bank).
-# Chosen to avoid P9_29 (GPIO111, PRU body servo) and P9_31 (GPIO110, PRU head servo).
-DEFAULT_DC_GPIO = 60   # P9_12 — GPIO1_28
+# Chosen to avoid P9_29 (PRU body servo), P9_31 (PRU head servo), and HDMI.
+# P9_12 = GPIO 60 is used by HDMI on BBB — use P9_15 instead.
+DEFAULT_DC_GPIO = 48   # P9_15 — GPIO1_16
 DEFAULT_RST_GPIO = 31  # P9_13 — GPIO0_31
 DEFAULT_BL_GPIO = 50   # P9_14 — GPIO1_18
 
@@ -129,13 +130,19 @@ class SpiDisplay:
                 "sudo apt install python3-pil"
             ) from exc
 
-        self._spidev_mod = spidev
+        # --- Verify SPI device exists ---
+        self._spi = spidev.SpiDev()
+        self._spi.open(self._spi_bus, self._spi_cs)
+        self._spi.max_speed_hz = self._spi_speed_hz
+        self._spi.mode = 0b00
+        self._spi.bits_per_word = 8
+
+        # Store module references for use in other methods
         self._Image = Image
         self._ImageDraw = ImageDraw
         self._ImageFont = ImageFont
 
         self._setup_gpio()
-        self._setup_spi()
         self._init_panel()
         self._setup_fonts()
 
@@ -167,13 +174,6 @@ class SpiDisplay:
         _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._rst_gpio}/direction", "out")
         _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._bl_gpio}/direction", "out")
         _gpio_sysfs_write(f"/sys/class/gpio/gpio{self._bl_gpio}/value", "1")  # backlight on
-
-    def _setup_spi(self) -> None:
-        self._spi = self._spidev_mod.SpiDev()
-        self._spi.open(self._spi_bus, self._spi_cs)
-        self._spi.max_speed_hz = self._spi_speed_hz
-        self._spi.mode = 0b00
-        self._spi.bits_per_word = 8
 
     def _init_panel(self) -> None:
         # Hardware reset

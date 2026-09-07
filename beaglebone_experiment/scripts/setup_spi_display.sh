@@ -108,7 +108,7 @@ echo "SPI device confirmed: ${SPI_DEV}"
 echo ""
 echo "Verifying pin configuration..."
 if command -v config-pin &>/dev/null; then
-  for pin_mode in "P9_17:spi_cs" "P9_18:spi" "P9_22:spi_sclk" "P9_12:gpio" "P9_13:gpio" "P9_14:gpio"; do
+  for pin_mode in "P9_17:spi_cs" "P9_18:spi" "P9_22:spi_sclk" "P9_15:gpio" "P9_13:gpio" "P9_14:gpio"; do
     pin="${pin_mode%%:*}"
     mode="${pin_mode##*:}"
     actual="$(config-pin -q "$pin" 2>/dev/null | head -1 || echo 'unknown')"

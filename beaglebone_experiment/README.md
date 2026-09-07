@@ -36,7 +36,7 @@ do not depend on Linux scheduling.
 | ST7789 SPI display | SCL/SCK | P9_22 (SPI0_SCLK) |
 | ST7789 SPI display | SDA/MOSI | P9_18 (SPI0_D1) |
 | ST7789 SPI display | RES/RST | P9_13 (GPIO) |
-| ST7789 SPI display | DC/RS | P9_12 (GPIO) |
+| ST7789 SPI display | DC/RS | P9_15 (GPIO) |
 | ST7789 SPI display | CS | P9_17 (SPI0_CS0) |
 | ST7789 SPI display | BL/LED | P9_14 (GPIO) or tie to VCC |
 | Laptop link | Ethernet | BBB RJ45 and laptop on the same trusted LAN |
@@ -57,7 +57,7 @@ BBB P9_22 (SPI0_SCLK)  ------------- ST7789 SCL/SCK
 BBB P9_18 (SPI0_D1)   ------------- ST7789 SDA/MOSI
 BBB P9_17 (SPI0_CS0)  ------------- ST7789 CS
 BBB P9_13 (GPIO)      ------------- ST7789 RES/RST
-BBB P9_12 (GPIO)      ------------- ST7789 DC/RS
+BBB P9_15 (GPIO)      ------------- ST7789 DC/RS
 BBB P9_14 (GPIO)      ------------- ST7789 BL/LED (optional)
 ```
 
