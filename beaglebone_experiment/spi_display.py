@@ -130,7 +130,15 @@ class SpiDisplay:
                 "sudo apt install python3-pil"
             ) from exc
 
-        # --- Verify SPI device exists ---
+        # --- Open SPI device ---
+        spi_path = f"/dev/spidev{self._spi_bus}.{self._spi_cs}"
+        if not os.path.exists(spi_path):
+            raise RuntimeError(
+                f"SPI device {spi_path} not found. The SPI0 overlay is not loaded.\n"
+                f"Run: sudo bash scripts/setup_spi_display.sh\n"
+                f"Then REBOOT: sudo reboot\n"
+                f"After reboot, run this test again."
+            )
         self._spi = spidev.SpiDev()
         self._spi.open(self._spi_bus, self._spi_cs)
         self._spi.max_speed_hz = self._spi_speed_hz
