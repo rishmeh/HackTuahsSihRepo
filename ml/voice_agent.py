@@ -44,6 +44,7 @@ from persona.phrases import PhraseBook, Situation
 from persona.voice import voice_params
 from voice_commands.intent import parse as parse_intent
 from voice_commands.dispatcher import dispatch as dispatch_intent
+from voice_commands.router import llm_route
 
 _SETTINGS = default_settings(age=10)
 _PHRASES  = PhraseBook()
@@ -186,36 +187,50 @@ def main():
                             print(f"You said: {transcription}")
 
                             if transcription:
-                                # Step 1: deterministic intent (instant, no LLM)
+                                # Layer 1: regex intent parser (instant)
                                 intent = parse_intent(transcription)
-                                quick_reply = dispatch_intent(intent, profile_id=ACTIVE_PROFILE_ID)
+                                quick_reply = dispatch_intent(intent, profile_id=ACTIVE_PROFILE_ID) \
+                                    if intent.name != "unknown" else None
 
                                 if quick_reply:
                                     speak_text(quick_reply)
                                 else:
-                                    # Step 2: fall through to LLM
-                                    speak_text(_say("thinking", Situation.THINKING))
-                                    print("Sending to LLM backend...")
-                                    payload = {
-                                        "query": transcription,
-                                        "student": {
-                                            "name": "Voice User", "age": 10,
-                                            "grade": "5th grade",
-                                            "personality_traits": ["curious"],
-                                            "interests": [], "language_level": "intermediate",
-                                        },
-                                        "session_id": SESSION_ID,
-                                    }
-                                    try:
-                                        r = requests.post(API_URL, json=payload, timeout=150)
-                                        if r.status_code == 200:
-                                            speak_text(r.json().get("answer", "No answer found."))
-                                        else:
-                                            print(f"API Error: {r.status_code}")
+                                    # Layer 2: LLM router (fast structured Ollama call)
+                                    # voice_agent is synchronous — asyncio.run() is safe here
+                                    import asyncio as _asyncio
+                                    routed = _asyncio.run(llm_route(transcription))
+                                    router_reply = (
+                                        dispatch_intent(routed, profile_id=ACTIVE_PROFILE_ID)
+                                        if routed and routed.name != "unknown"
+                                        else None
+                                    )
+
+                                    if router_reply:
+                                        speak_text(router_reply)
+                                    else:
+                                        # Layer 3: full LLM chat
+                                        speak_text(_say("thinking", Situation.THINKING))
+                                        print("Sending to LLM backend...")
+                                        payload = {
+                                            "query": transcription,
+                                            "student": {
+                                                "name": "Voice User", "age": 10,
+                                                "grade": "5th grade",
+                                                "personality_traits": ["curious"],
+                                                "interests": [], "language_level": "intermediate",
+                                            },
+                                            "session_id": SESSION_ID,
+                                        }
+                                        try:
+                                            r = requests.post(API_URL, json=payload, timeout=150)
+                                            if r.status_code == 200:
+                                                speak_text(r.json().get("answer", "No answer found."))
+                                            else:
+                                                print(f"API Error: {r.status_code}")
+                                                speak_text(_say("error", Situation.ERROR))
+                                        except requests.exceptions.RequestException as e:
+                                            print(f"Connection Error: {e}")
                                             speak_text(_say("error", Situation.ERROR))
-                                    except requests.exceptions.RequestException as e:
-                                        print(f"Connection Error: {e}")
-                                        speak_text(_say("error", Situation.ERROR))
 
                         except Exception as e:
                             print(f"Error during processing: {e}")

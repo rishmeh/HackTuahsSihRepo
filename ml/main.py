@@ -113,8 +113,10 @@ async def health():
 @app.post("/voice/text-command", tags=["Voice"])
 async def voice_text_command(body: dict):
     """
-    Accept pre-transcribed text from the browser Web Speech API,
-    run intent dispatch, fall through to the LLM for unknown queries.
+    Three-layer intent resolution:
+      1. Regex parser  — instant, no LLM needed
+      2. LLM router    — fast Ollama call, structured token response
+      3. Full LLM chat — fallback for open-ended questions
     """
     text = str(body.get("text", "")).strip()
     profile_id = int(body.get("profile_id", 0))
@@ -123,12 +125,23 @@ async def voice_text_command(body: dict):
 
     from voice_commands.intent import parse as _parse
     from voice_commands.dispatcher import dispatch as _dispatch
+    from voice_commands.router import llm_route
 
-    reply = _dispatch(_parse(text), profile_id=profile_id)
-    if reply:
-        return {"transcription": text, "response": reply}
+    # Layer 1: regex
+    intent = _parse(text)
+    if intent.name != "unknown":
+        reply = _dispatch(intent, profile_id=profile_id)
+        if reply:
+            return {"transcription": text, "response": reply}
 
-    # Unknown intent — fall through to LLM
+    # Layer 2: LLM router
+    routed = await llm_route(text)
+    if routed and routed.name != "unknown":
+        reply = _dispatch(routed, profile_id=profile_id)
+        if reply:
+            return {"transcription": text, "response": reply}
+
+    # Layer 3: full LLM chat
     req = ChatRequest(
         query=text,
         student=StudentProfile(
