@@ -2,6 +2,9 @@
 # beaglebone_experiment/scripts/setup_spi_display.sh
 # Configure BBB pins for the ST7789 SPI IPS display and load the SPI0 overlay.
 #
+# Works with modern BeagleBone Debian (5.x/6.x kernels) where config-pin overlay
+# entries may not exist. Uses U-Boot overlay loading via uEnv.txt.
+#
 # Must run as root. Does NOT touch P9_29 / P9_31 (PRU servo pins).
 #
 # Usage: sudo bash scripts/setup_spi_display.sh
@@ -18,48 +21,105 @@ fi
 
 echo "=== Table Tot BBB — SPI display setup ==="
 
-# --- Load the SPI0 device-tree overlay ---
-# The overlay enables SPI0 on P9_17 (CS0), P9_18 (MOSI), P9_21 (MISO), P9_22 (SCLK).
-# On modern BeagleBoard Debian images this is done via /boot/firmware/uEnv.txt or
-# the cape manager. We try both approaches.
-
-OVERLAY="BB-SPIDEV0-00A0"
 SPI_DEV="/dev/spidev0.0"
+OVERLAY="BB-SPIDEV0-00A0"
 
-# Try loading via config-pin overlay mechanism (newer images)
+# --- Check if SPI device already exists ---
+if [[ -e "${SPI_DEV}" ]]; then
+  echo "SPI device already available: ${SPI_DEV}"
+  echo "Skipping overlay setup."
+else
+  echo "SPI device not found. Checking for overlay loading..."
+
+  # Try modern config-pin with overlay support (some newer images still support this)
+  if command -v config-pin &>/dev/null; then
+    echo "Trying config-pin overlay load..."
+    config-pin overlay spi0 2>/dev/null || true
+    config-pin overlay ${OVERLAY} 2>/dev/null || true
+    sleep 1
+  fi
+
+  # Check again
+  if [[ ! -e "${SPI_DEV}" ]]; then
+    # Find uEnv.txt location
+    UENV=""
+    for path in /boot/firmware/uEnv.txt /boot/uEnv.txt; do
+      if [[ -f "$path" ]]; then
+        UENV="$path"
+        break
+      fi
+    done
+
+    if [[ -z "$UENV" ]]; then
+      echo ""
+      echo "ERROR: Could not find uEnv.txt. Manual overlay setup required."
+      echo "Add to your boot configuration:"
+      echo "  uboot_overlay_addr4=/lib/firmware/${OVERLAY}.dtbo"
+      echo ""
+      echo "Then reboot: sudo reboot"
+      exit 1
+    fi
+
+    echo ""
+    echo "Adding SPI0 overlay to ${UENV}..."
+
+    # Check if overlay already in uEnv.txt
+    if grep -q "${OVERLAY}" "$UENV" 2>/dev/null; then
+      echo "Overlay already referenced in ${UENV}."
+    else
+      echo "# Table Tot ST7789 SPI display" >> "$UENV"
+      echo "uboot_overlay_addr4=/lib/firmware/${OVERLAY}.dtbo" >> "$UENV"
+      echo "Added: uboot_overlay_addr4=/lib/firmware/${OVERLAY}.dtbo"
+    fi
+
+    # Verify the overlay file exists in /lib/firmware
+    if [[ ! -f "/lib/firmware/${OVERLAY}.dtbo" ]]; then
+      echo ""
+      echo "WARNING: /lib/firmware/${OVERLAY}.dtbo not found."
+      echo "You may need to install it or check the correct overlay name."
+      echo "Available SPI overlays in /lib/firmware:"
+      ls /lib/firmware/BB-SPIDEV* 2>/dev/null || echo "  (none found)"
+      echo ""
+      echo "Trying alternative overlay names..."
+      for alt in BB-SPIDEV0-00A0 BB-SPIDEV0 bbspi0; do
+        if [[ -f "/lib/firmware/${alt}.dtbo" ]]; then
+          echo "Found: ${alt}.dtbo"
+          sed -i "s|${OVERLAY}|${alt}|g" "$UENV"
+          break
+        fi
+      done
+    fi
+
+    echo ""
+    echo "Overlay configuration added. A REBOOT is required."
+    echo ""
+    echo "Run: sudo reboot"
+    echo ""
+    echo "After reboot, run this script again to verify, then:"
+    echo "  sudo python3 ${EXPERIMENT_DIR}/test_spi_display.py"
+    exit 0
+  fi
+fi
+
+echo ""
+echo "SPI device confirmed: ${SPI_DEV}"
+
+# --- Verify pins are configured correctly ---
+echo ""
+echo "Verifying pin configuration..."
 if command -v config-pin &>/dev/null; then
-  echo "Configuring SPI0 pins via config-pin..."
-  config-pin P9_17 spi_cs   || echo "  (P9_17 already in spi_cs mode or unavailable)"
-  config-pin P9_18 spi     || echo "  (P9_18 already in spi mode or unavailable)"
-  config-pin P9_21 spi     || echo "  (P9_21 already in spi mode or unavailable)"
-  config-pin P9_22 spi_sclk || echo "  (P9_22 already in spi_sclk mode or unavailable)"
+  for pin_mode in "P9_17:spi_cs" "P9_18:spi" "P9_22:spi_sclk" "P9_12:gpio" "P9_13:gpio" "P9_14:gpio"; do
+    pin="${pin_mode%%:*}"
+    mode="${pin_mode##*:}"
+    actual="$(config-pin -q "$pin" 2>/dev/null | head -1 || echo 'unknown')"
+    echo "  $pin: $actual"
+  done
+else
+  echo "  config-pin not available — pins configured via device tree overlay."
 fi
-
-# Configure GPIO control pins (DC, RST, BL) as gpio
-if command -v config-pin &>/dev/null; then
-  echo "Configuring GPIO control pins..."
-  config-pin P9_12 gpio || echo "  (P9_12 already gpio or unavailable)"
-  config-pin P9_13 gpio || echo "  (P9_13 already gpio or unavailable)"
-  config-pin P9_14 gpio || echo "  (P9_14 already gpio or unavailable)"
-fi
-
-# --- Verify /dev/spidev0.0 exists ---
-if [[ ! -e "${SPI_DEV}" ]]; then
-  echo ""
-  echo "WARNING: ${SPI_DEV} not found. You may need to reboot after loading the overlay."
-  echo "Add this line to /boot/firmware/uEnv.txt (or /boot/uEnv.txt on older images):"
-  echo "  uboot_overlay_addr4=/lib/firmware/${OVERLAY}.dtbo"
-  echo ""
-  echo "Then reboot: sudo reboot"
-  echo ""
-  echo "Alternatively, if using an older image, add to /boot/uEnv.txt:"
-  echo "  cape_enable=bone_capemgr.enable_partno=${OVERLAY}"
-  exit 1
-fi
-
-echo "SPI device found: ${SPI_DEV}"
 
 # --- Install Python deps if missing ---
+echo ""
 echo "Checking Python dependencies..."
 python3 -c "import spidev" 2>/dev/null || {
   echo "  Installing python3-spidev..."
@@ -72,5 +132,10 @@ python3 -c "from PIL import Image" 2>/dev/null || {
 
 echo ""
 echo "=== SPI display setup complete ==="
-echo "Run the test: sudo python3 ${EXPERIMENT_DIR}/test_spi_display.py"
-echo "Then start the bridge: sudo bash ${EXPERIMENT_DIR}/run.sh"
+echo ""
+echo "Run the test:"
+echo "  cd ${EXPERIMENT_DIR}"
+echo "  sudo python3 test_spi_display.py"
+echo ""
+echo "Then start the bridge:"
+echo "  sudo bash ${EXPERIMENT_DIR}/run.sh"

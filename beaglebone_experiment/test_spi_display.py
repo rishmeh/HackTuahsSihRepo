@@ -10,8 +10,13 @@ Usage: sudo python3 test_spi_display.py [--rotation 0|90|180|270] [--bgr]
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
+
+# Add the repo root to the Python path so we can import beaglebone_experiment
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
 
 from beaglebone_experiment.spi_display import SpiDisplay
 
