@@ -1,6 +1,6 @@
 # Table Tot — BeagleBone Black SPI Display Setup Log
 
-> **September 2026** | **Status: BLOCKED on GPIO 48 (P9_15) export error**
+> **September 2026** | **Status: Display stays black (backlight ON, no image)**
 
 ---
 
@@ -76,7 +76,7 @@ P9_1   │ GND               │ Common ground
 P9_3   │ 3.3V              │ Display VCC
 P9_13  │ GPIO 31 (output)  │ Display RES/RST
 P9_14  │ GPIO 50 (output)  │ Display BL/LED (backlight)
-P9_15  │ GPIO 48 (output)  │ Display DC/RS ← BLOCKED
+P9_15  │ GPIO 48 (output)  │ Display DC/RS
 P9_17  │ SPI0_CS0          │ Display CS
 P9_18  │ SPI0_D1 (MOSI)    │ Display SDA/MOSI
 P9_22  │ SPI0_SCLK         │ Display SCL/SCK
@@ -89,7 +89,6 @@ P9_31  │ PRU0 R30 bit 0    │ Head servo signal
 - P9_29/P9_31 are EXCLUSIVELY PRU0 outputs (PWM servo timing)
 - SPI0 pins (P9_17/18/21/22) are EXCLUSIVELY for ST7789 display
 - P9_12 (GPIO 60) is reserved by HDMI overlay
-- P9_15 (GPIO 48) appears to also be reserved — **CURRENT BLOCKER**
 - HDMI overlay is DISABLED (to free SPI0 pins)
 - eMMC is active (uses some GPIOs)
 
@@ -102,6 +101,10 @@ P9_31  │ PRU0 R30 bit 0    │ Head servo signal
 | `beaglebone_experiment/pru_servo.py` | PRU0 servo pulse writer (shared RAM) |
 | `beaglebone_experiment/pru/servo_pwm.pru0.c` | PRU0 firmware (20ms PWM frame) |
 | `beaglebone_experiment/test_spi_display.py` | Standalone display test |
+| `beaglebone_experiment/test_display_configs.py` | Offset/MADCTL variation tests |
+| `beaglebone_experiment/test_display_hardware.py` | Hardware diagnostic (solid colors) |
+| `beaglebone_experiment/test_display_pins.py` | Pin-by-pin diagnostic |
+| `beaglebone_experiment/test_display_comm.py` | SPI communication test (reads panel status) |
 | `beaglebone_experiment/test_pru_servo.py` | Standalone servo test |
 | `beaglebone_experiment/scripts/setup_spi_display.sh` | SPI pin config + overlay loader |
 | `beaglebone_experiment/scripts/install_pru_firmware.sh` | PRU firmware compiler + loader |
@@ -212,16 +215,6 @@ OSError: [Errno 22] Invalid argument
 sudo apt install python3-libgpiod
 ```
 
-**Verification:**
-```bash
-# Confirm gpiod is installed
-python3 -c "import gpiod; print('OK')"
-
-# Run display test
-cd ~/HackTuahsSihRepo/beaglebone_experiment
-sudo python3 test_spi_display.py
-```
-
 ---
 
 ## Problem 6: SPI Device Nodes Missing (PARTIALLY SOLVED)
@@ -238,6 +231,60 @@ echo spi0.0 | sudo tee /sys/bus/spi/drivers/spidev/bind
 ```
 
 **Proposed Permanent Fix:** Add a udev rule or systemd service to bind spidev at boot.
+
+---
+
+## Problem 7: Display Stays Black (Backlight ON) — UNRESOLVED
+
+**Symptom:** Display shows slight light (backlight ON) but no image appears. Face rendering test cycles through states but display remains black. Color fill test also shows nothing.
+
+**What's working:**
+- SPI device exists (`/dev/spidev0.0`, `/dev/spidev0.1`)
+- spidev module loaded and bound
+- GPIO control working via libgpiod (gpiod v1 API)
+- Backlight turns on/off
+- No errors in Python or kernel logs
+
+**What's NOT working:**
+- No image appears on display
+- Color fill test (solid RED/GREEN/BLUE/WHITE) shows nothing
+- Face rendering test shows nothing
+
+**Possible Causes:**
+1. **Wrong panel type** — panel may not be ST7789. Could be:
+   - ILI9341 (different init sequence, 240×320)
+   - ST7735 (different init sequence, 128×160 or 80×160)
+   - ST7789V (slightly different init)
+   - GC9A01 (SPI but different protocol, 240×240 round)
+   
+2. **Wrong wiring** — MOSI/MISO swapped, CS wrong, DC not connected properly
+
+3. **Panel not receiving data** — SCK not toggling, MOSI stuck high/low
+
+4. **Panel is dead** — hardware failure
+
+**Diagnostic Steps Taken:**
+1. ✅ Tested libgpiod GPIO — all pins toggle
+2. ✅ Tested SPI device — opens without error
+3. ❌ Color fill test — display stays black
+4. ❌ Face rendering test — display stays black
+
+**Next Diagnostic Steps:**
+1. **Run pin-by-pin test** (`test_display_pins.py`) — verify each GPIO toggles
+2. **Run communication test** (`test_display_comm.py`) — read panel status registers
+3. **Check panel markings** — look for IC markings on the panel PCB
+4. **Try different init sequences** — if panel is ILI9341 or ST7735, need different init
+5. **Check MOSI with multimeter/LED** — verify data is actually being sent
+
+**Diagnostic Commands to Run:**
+```bash
+# Test 1: Pin-by-pin
+cd ~/HackTuahsSihRepo/beaglebone_experiment
+sudo python3 test_display_pins.py
+
+# Test 2: Communication (reads panel status)
+sudo python3 test_display_comm.py
+```
 
 ---
 
@@ -266,23 +313,22 @@ Panel VCC   → P9_3 (3.3V)
 Panel GND   → P9_1
 Panel SCK   → P9_22 (SPI0_SCLK)
 Panel MOSI  → P9_18 (SPI0_D1)
-Panel RST   → P9_13 (GPIO 31) ← WORKS
-Panel DC/RS → P9_15 (GPIO 48) ← BLOCKED
+Panel RST   → P9_13 (GPIO 31)
+Panel DC/RS → P9_15 (GPIO 48)
 Panel CS    → P9_17 (SPI0_CS0)
-Panel BL    → P9_14 (GPIO 50) ← WORKS
+Panel BL    → P9_14 (GPIO 50)
 ```
 
 ---
 
 ## Next Steps
 
-1. **Identify which GPIO pins are free on BBB** — need to check which pins are NOT reserved by HDMI, eMMC, SPI, or PRU overlays.
-
-2. **Check if eMMC is using GPIO 48** — eMMC on BBB uses a lot of GPIOs. If so, P9_15 won't work either.
-
-3. **Alternative approach:** Use the SPI overlay's built-in control pins and avoid GPIO sysfs entirely. Some ST7789 panels can work with hardware DC control via SPI mode3 or a separate GPIO that's confirmed free.
-
-4. **Permanent spidev binding:** Create systemd service or udev rule to bind spidev driver at boot.
+1. **Run `test_display_pins.py`** — verify each pin toggles with multimeter/LED
+2. **Run `test_display_comm.py`** — read panel status registers to confirm communication
+3. **Check panel markings** — look at the PCB for IC markings (ST7789, ILI9341, ST7735, etc.)
+4. **If panel is not ST7789** — rewrite init sequence for correct controller
+5. **If SPI not working** — check MOSI/SCK with multimeter, verify wiring
+6. **Permanent spidev binding** — create systemd service or udev rule
 
 ---
 
@@ -290,9 +336,13 @@ Panel BL    → P9_14 (GPIO 50) ← WORKS
 
 | File | Change |
 |------|--------|
-| `beaglebone_experiment/spi_display.py` | DC_GPIO: 60 → 48 (P9_12 → P9_15) |
-| `beaglebone_experiment/scripts/setup_spi_display.sh` | Rewrote for modern kernels, check correct uEnv.txt |
+| `beaglebone_experiment/spi_display.py` | DC_GPIO: 60 → 48, replaced sysfs with libgpiod GpioLine class |
+| `beaglebone_experiment/scripts/setup_spi_display.sh` | Rewrote for modern kernels, added python3-libgpiod |
 | `beaglebone_experiment/test_spi_display.py` | Fixed sys.path for standalone use |
+| `beaglebone_experiment/test_display_configs.py` | Test offset/MADCTL variations |
+| `beaglebone_experiment/test_display_hardware.py` | Solid color fill test |
+| `beaglebone_experiment/test_display_pins.py` | Pin-by-pin diagnostic |
+| `beaglebone_experiment/test_display_comm.py` | SPI communication test (reads panel status) |
 | `beaglebone_experiment/README.md` | Updated wiring tables |
 | `beaglebone_experiment/.env.bbb.example` | Added DISPLAY_DC_GPIO=48 |
 
@@ -307,3 +357,6 @@ Panel BL    → P9_14 (GPIO 50) ← WORKS
 5. Always check `dmesg | grep -i gpio` after failed export.
 6. Always check `grep spidev /proc/devices` after `modprobe spidev`.
 7. eMMC on BBB reserves many GPIOs in the GPIO1 bank (32-63) — avoid these for DC/RS.
+8. libgpiod (chardev API) is the correct way to control GPIO on kernel 6.12+.
+9. Black screen with backlight = panel powered but not receiving valid data.
+10. Always verify panel type (ST7789 vs ILI9341 vs ST7735) before writing driver.
