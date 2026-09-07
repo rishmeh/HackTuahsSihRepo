@@ -1,34 +1,38 @@
 #!/usr/bin/env python3
-"""ST7789 hardware diagnostic — no face rendering, just raw SPI + GPIO test."""
+"""ST7789 hardware diagnostic — no face rendering, just raw SPI + GPIO test.
+Uses gpiod v1 API (compatible with python3-libgpiod 1.6.x on Debian 12)."""
 import sys
 import os
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import spidev
+import gpiod
 
-# GPIO setup
-def gpio_init(gpio_num):
+# GPIO setup using v1 API
+def gpio_init(gpio_num, consumer="test"):
     bank = gpio_num // 32
     line = gpio_num % 32
+    chip_name = f"gpiochip{bank}"
+    chip_path = f"/dev/{chip_name}"
+    if not os.path.exists(chip_path):
+        for i in range(4):
+            if os.path.exists(f"/dev/gpiochip{i}"):
+                chip_name = f"gpiochip{i}"
+                break
     try:
-        import gpiod
-        chip = gpiod.Chip(f"gpiochip{bank}")
-        req = chip.request_lines(
-            {f"test_{gpio_num}": [line]},
-            consumer=f"test_{gpio_num}",
-        )
-        return req, gpiod
+        chip = gpiod.Chip(chip_name)
+        line_obj = chip.get_line(line)
+        line_obj.request(consumer=consumer, type=gpiod.LINE_REQ_DIR_OUT, default_val=0)
+        return line_obj, chip
     except Exception as e:
         print(f"  GPIO {gpio_num} init failed: {e}")
         return None, None
 
-def gpio_set(req, gpiod, val):
-    try:
-        req.set_value(f"test_{list(req.to_line_values().keys())[0]}", val)
-    except Exception:
+def gpio_set(line_obj, val):
+    if line_obj:
         try:
-            req.set_value(0, val)
+            line_obj.set_value(val)
         except Exception as e:
             print(f"  GPIO set error: {e}")
 
@@ -46,34 +50,34 @@ RST_GPIO = 31  # P9_13
 BL_GPIO = 50   # P9_14
 
 print("Initializing GPIO...")
-dc_req, gpiod_mod = gpio_init(DC_GPIO)
-rst_req, _ = gpio_init(RST_GPIO)
-bl_req, _ = gpio_init(BL_GPIO)
+dc_line, dc_chip = gpio_init(DC_GPIO, "dc")
+rst_line, rst_chip = gpio_init(RST_GPIO, "rst")
+bl_line, bl_chip = gpio_init(BL_GPIO, "bl")
 
-if not dc_req:
+if not dc_line:
     print("FAIL: Cannot init DC GPIO")
     sys.exit(1)
 
 def send_cmd(cmd):
-    gpio_set(dc_req, gpiod_mod, 0)
+    gpio_set(dc_line, 0)
     spi.writebytes([cmd & 0xFF])
 
 def send_data(data):
-    gpio_set(dc_req, gpiod_mod, 1)
+    gpio_set(dc_line, 1)
     spi.writebytes(list(data) if isinstance(data, (bytes, bytearray)) else [data & 0xFF])
 
 # Hardware reset
 print("Resetting panel...")
-gpio_set(rst_req, gpiod_mod, 1)
+gpio_set(rst_line, 1)
 time.sleep(0.01)
-gpio_set(rst_req, gpiod_mod, 0)
+gpio_set(rst_line, 0)
 time.sleep(0.01)
-gpio_set(rst_req, gpiod_mod, 1)
+gpio_set(rst_line, 1)
 time.sleep(0.12)
 
 # Backlight on
 print("Backlight ON")
-gpio_set(bl_req, gpiod_mod, 1)
+gpio_set(bl_line, 1)
 
 # Initialize panel
 print("Initializing ST7789...")
@@ -97,7 +101,7 @@ def fill_screen(r, g, b):
     send_data(bytes([0x00, 0x00, 0x00, 0xEF]))  # 0-239
     # RAMWR
     send_cmd(0x2C)
-    gpio_set(dc_req, gpiod_mod, 1)
+    gpio_set(dc_line, 1)
     # RGB565
     rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
     high = (rgb565 >> 8) & 0xFF
@@ -132,5 +136,11 @@ print("  If nothing at all, panel may be dead or wrong type (not ST7789).")
 print("  If colors appeared, panel works — issue is in face rendering code.")
 
 # Cleanup
-gpio_set(bl_req, gpiod_mod, 0)
+gpio_set(bl_line, 0)
+dc_line.release()
+rst_line.release()
+bl_line.release()
+dc_chip.close()
+rst_chip.close()
+bl_chip.close()
 spi.close()
