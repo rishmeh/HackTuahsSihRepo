@@ -34,7 +34,7 @@ trap cleanup EXIT INT TERM
 
 echo "[1/2] Starting ML backend on laptop..."
 cd "$SCRIPT_DIR"
-uvicorn main:app --reload --host 127.0.0.1 --port 8000 &
+uvicorn main:app --reload --host 0.0.0.0 --port 8000 &
 
 ML_PID=$!
 
