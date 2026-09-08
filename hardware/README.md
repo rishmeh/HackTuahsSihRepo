@@ -10,7 +10,7 @@ Use 64-bit Raspberry Pi OS Bookworm:
 ```bash
 sudo apt update
 sudo apt install -y python3-venv python3-picamera2 python3-opencv \
-  python3-gpiozero python3-lgpio python3-pygame python3-pil python3-spidev
+  python3-gpiozero python3-lgpio python3-pil python3-spidev
 
 cd ~/TableTot
 python3 -m venv --system-site-packages .venv-pi
@@ -24,12 +24,17 @@ Edit `hardware/.env.pi` and set the laptop IP. The
 packages inside the environment.
 
 For the pictured 240x320 GMT020-02-8P ST7789V SPI panel, enable SPI once and
-reboot. Keep `DISPLAY_DRIVER=st7789v` in `hardware/.env.pi`.
+reboot. Keep `DISPLAY_DRIVER=st7789v` in `hardware/.env.pi`. It uses the
+working panel initialization from the supplied `file.py`, with a horizontal
+black-and-cyan pixel-art face controlled by the laptop's robot state.
 
 ```bash
 sudo raspi-config nonint do_spi 0
 sudo reboot
 ```
+
+`python3-pygame` is needed only for the separate HDMI backend, not for this
+ST7789V SPI display.
 
 ## Laptop installation and startup
 

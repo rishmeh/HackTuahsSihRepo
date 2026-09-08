@@ -7,7 +7,6 @@ It targets Raspberry Pi 5's RP1 GPIO controller via ``lgpio``.
 from __future__ import annotations
 
 import logging
-import math
 import os
 import threading
 import time
@@ -15,7 +14,7 @@ from typing import Optional
 
 import lgpio
 import spidev
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 logger = logging.getLogger(__name__)
 
@@ -26,29 +25,61 @@ DC_PIN = 25
 RESET_PIN = 24
 BACKLIGHT_PIN = 9
 VALID_STATES = {"idle", "listening", "speaking", "thinking", "happy", "sleeping", "focus"}
+BLACK, CYAN = (0, 0, 0), (0, 255, 255)
+PIXEL_SCALE = 8
+LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT = HEIGHT // PIXEL_SCALE, WIDTH // PIXEL_SCALE
+EYES = {
+    "idle": ["##  ##", "##  ##", "##  ##"], "listening": ["##  ##", "### ###", "##  ##"],
+    "thinking": ["##    ", "##  ##", "    ##"], "happy": [" ##  ## ", "##    ##", "        "],
+    "focus": ["###  ###", "###  ###", "###  ###"], "sleeping": ["        ", "##    ##", "        "],
+}
+MOUTHS = {
+    "idle": [" ## "], "listening": ["####"], "thinking": ["##  ", "  ##"],
+    "happy": ["##  ##", " #### ", "  ##  "], "focus": ["####"], "sleeping": ["    ", " ## "],
+    "speaking_a": [" #### "], "speaking_b": ["  ##  ", " #### ", "  ##  "],
+}
 
 
 def _open_gpio_chip() -> tuple[int, int]:
     """Find RP1 on a Pi 5, with a safe fallback for other Pi OS layouts."""
+    tried: list[int] = []
     for name in os.listdir("/sys/class/gpio"):
-        if not name.startswith("gpiochip"):
+        # The supplied working driver finds Pi 5's RP1 entries as ``chipN``;
+        # other Pi OS images expose ``gpiochipN``. Support both spellings.
+        if name.startswith("chip"):
+            index = int(name.removeprefix("chip"))
+        elif name.startswith("gpiochip"):
+            index = int(name.removeprefix("gpiochip"))
+        else:
             continue
         label_path = f"/sys/class/gpio/{name}/label"
         try:
             with open(label_path, encoding="utf-8") as label_file:
                 label = label_file.read().lower()
             if "rp1" in label:
-                index = int(name.removeprefix("gpiochip"))
-                return lgpio.gpiochip_open(index), index
+                tried.append(index)
+                try:
+                    return lgpio.gpiochip_open(index), index
+                except Exception:
+                    # Some Pi OS releases expose an RP1 label on a chip that
+                    # lgpio cannot open; continue to the device-node scan.
+                    continue
         except OSError:
             continue
-    for index in range(32):
+    for index in reversed(list(range(16)) + [569]):
         if os.path.exists(f"/dev/gpiochip{index}"):
+            if index in tried:
+                continue
+            tried.append(index)
             try:
                 return lgpio.gpiochip_open(index), index
             except Exception:
                 continue
-    raise RuntimeError("No usable GPIO chip found for the ST7789V display")
+    checked = ", ".join(f"gpiochip{index}" for index in tried) or "none"
+    raise RuntimeError(
+        "lgpio could not open a GPIO chip (checked: " + checked + "). "
+        "Verify python3-lgpio is installed and that the current user may access /dev/gpiochip*."
+    )
 
 
 class ST7789VDisplay:
@@ -108,9 +139,8 @@ class ST7789VDisplay:
             self._state = state
 
     def show_text(self, text: str, duration: Optional[float] = None) -> None:
-        with self._lock:
-            self._overlay = text
-            self._overlay_deadline = time.monotonic() + duration if duration else 0.0
+        # Face-only panel: laptop greetings must not alter the black background.
+        del text, duration
 
     def clear_text(self) -> None:
         with self._lock:
@@ -169,49 +199,26 @@ class ST7789VDisplay:
             self._present(self._draw_face(state, overlay, started - self._started_at))
             time.sleep(max(0.0, interval - (time.monotonic() - started)))
 
-    @staticmethod
-    def _font(size: int) -> ImageFont.ImageFont:
-        try:
-            return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
-        except OSError:
-            return ImageFont.load_default()
-
     def _draw_face(self, state: str, overlay: Optional[str], elapsed: float) -> Image.Image:
-        image = Image.new("RGB", (WIDTH, HEIGHT), (20, 20, 20))
-        draw = ImageDraw.Draw(image)
-        color = {"listening": (0, 150, 255), "happy": (0, 200, 100), "thinking": (255, 180, 0)}.get(state, (240, 240, 240))
-        blink = state == "sleeping" or elapsed % 4.0 < 0.16
-        centers = (75, 165)
-        if blink:
-            for x in centers:
-                draw.line((x - 25, 125, x + 25, 125), fill=(240, 240, 240), width=4)
-        else:
-            for x in centers:
-                draw.ellipse((x - 27, 92, x + 27, 158), fill=color)
-                draw.ellipse((x - 11, 111, x + 11, 139), fill=(20, 20, 20))
-                draw.ellipse((x - 6, 114, x, 120), fill=(240, 240, 240))
-        if state in {"thinking", "happy", "listening"}:
-            brow = color
-            if state == "thinking":
-                draw.line((48, 77, 100, 90), fill=brow, width=4); draw.line((140, 90, 192, 77), fill=brow, width=4)
-            else:
-                draw.line((48, 83, 100, 83), fill=brow, width=4); draw.line((140, 83, 192, 83), fill=brow, width=4)
-        white = (240, 240, 240)
-        if state == "happy":
-            draw.arc((78, 177, 162, 225), start=10, end=170, fill=white, width=5)
-        elif state == "speaking":
-            open_height = 13 + int(16 * abs(math.sin(elapsed * 8)))
-            draw.ellipse((78, 191 - open_height // 2, 162, 191 + open_height // 2), fill=white)
-        elif state == "thinking":
-            draw.arc((96, 185, 145, 210), start=210, end=340, fill=white, width=4)
-        elif state == "listening":
-            draw.arc((78, 178, 162, 222), start=15, end=165, fill=white, width=4)
-        else:
-            draw.arc((96, 185, 145, 210), start=210, end=340, fill=white, width=4)
-        if overlay:
-            draw.rectangle((0, 258, WIDTH, HEIGHT), fill=(0, 0, 0))
-            text = overlay[:34]
-            font = self._font(16)
-            bounds = draw.textbbox((0, 0), text, font=font)
-            draw.text(((WIDTH - (bounds[2] - bounds[0])) // 2, 282), text, fill=white, font=font)
-        return image
+        del overlay
+        canvas = Image.new("RGB", (LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT), BLACK)
+        draw = ImageDraw.Draw(canvas)
+        frame = int(elapsed * 4)
+        eyes = EYES["idle" if state == "speaking" else state]
+        if state != "sleeping" and frame % 16 == 0:
+            eyes = ["##  ##"]  # one short, subtle blink
+        self._draw_sprite(draw, eyes, (LANDSCAPE_WIDTH - max(map(len, eyes))) // 2, 8)
+        mouth = MOUTHS["speaking_a" if frame % 2 == 0 else "speaking_b"] if state == "speaking" else MOUTHS[state]
+        self._draw_sprite(draw, mouth, (LANDSCAPE_WIDTH - max(map(len, mouth))) // 2, 18)
+        if state == "thinking":
+            self._draw_sprite(draw, ["#" * ((frame % 3) + 1)], 32, 6)
+        # Preserve the proven portrait controller/window setup and rotate only
+        # the composition, producing a horizontal face layout on the mounted TFT.
+        return canvas.resize((HEIGHT, WIDTH), Image.Resampling.NEAREST).transpose(Image.Transpose.ROTATE_90)
+
+    @staticmethod
+    def _draw_sprite(draw: ImageDraw.ImageDraw, sprite: list[str], x: int, y: int) -> None:
+        for row, line in enumerate(sprite):
+            for column, pixel in enumerate(line):
+                if pixel == "#":
+                    draw.point((x + column, y + row), fill=CYAN)

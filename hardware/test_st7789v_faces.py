@@ -24,12 +24,6 @@ def main() -> None:
             for state in SEQUENCE:
                 print(f"  {state}")
                 display.set_state(state)
-                if state == "speaking":
-                    display.show_text("Hello! I am Table Tot", duration=2.5)
-                elif state == "happy":
-                    display.show_text("Face recognized!", duration=2.5)
-                elif state == "thinking":
-                    display.show_text("Let me think...", duration=2.5)
                 time.sleep(3)
     except KeyboardInterrupt:
         print("\nStopped.")

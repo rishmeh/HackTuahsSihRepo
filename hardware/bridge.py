@@ -22,7 +22,6 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hardware.camera import CameraCapture  # noqa: E402
-from hardware.display import Display  # noqa: E402
 from hardware.gpio import ServoController  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -63,6 +62,7 @@ class PeripheralDaemon:
             from hardware.st7789v_display import ST7789VDisplay
             self.display = ST7789VDisplay()
         elif display_driver == "hdmi":
+            from hardware.display import Display
             self.display = Display(width=display_width, height=display_height, fullscreen=fullscreen)
         else:
             raise ValueError("DISPLAY_DRIVER must be hdmi or st7789v")
