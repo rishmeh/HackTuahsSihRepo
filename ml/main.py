@@ -13,11 +13,16 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import queue
 import sys
+import cv2
+import numpy as np
 from pathlib import Path
 from typing import Annotated, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from chat.models import ChatRequest, ChatResponse, StudentProfile
@@ -40,6 +45,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from learner.routes import router as learner_router  # noqa: E402
 from vision.routes import router as vision_router  # noqa: E402
+from vision.pipeline import VisionPipeline  # noqa: E402
+from vision.factory import build_pipeline  # noqa: E402
+from vision import config as vision_config  # noqa: E402
+from robot_state import RobotState  # noqa: E402
 
 from alarms.routes import router as alarms_router
 from alarms.scheduler import start_scheduler
@@ -55,6 +64,9 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
+# Silence the every-5-second apscheduler executor heartbeat logs
+logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="KidBot ML API", version="3.0.0")
@@ -115,7 +127,6 @@ async def health():
         "status": "ok",
         "model": config.OLLAMA_MODEL,
         "vision_model": config.OLLAMA_VISION_MODEL,
-        "escalation_mode": config.ESCALATION_MODE,
     }
 
 

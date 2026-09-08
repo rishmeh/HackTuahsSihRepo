@@ -13,14 +13,7 @@ echo "This script starts ONLY the ML backend on this machine."
 echo "Run hardware/bridge.py on the Pi separately."
 echo ""
 
-# Activate virtual environment if it exists
-if [ -d "$REPO_ROOT/.venv-laptop" ]; then
-    source "$REPO_ROOT/.venv-laptop/bin/activate"
-elif [ -d "$REPO_ROOT/venv" ]; then
-    source "$REPO_ROOT/venv/bin/activate"
-elif [ -d "$SCRIPT_DIR/venv" ]; then
-    source "$SCRIPT_DIR/venv/bin/activate"
-fi
+
 
 # Check for .env or .env.laptop
 if [ -f "$SCRIPT_DIR/.env.laptop" ]; then
@@ -41,15 +34,18 @@ trap cleanup EXIT INT TERM
 
 echo "[1/2] Starting ML backend on laptop..."
 cd "$SCRIPT_DIR"
-uvicorn main:app --host 0.0.0.0 --port 8000 &
+uvicorn main:app --reload --host 127.0.0.1 --port 8000 &
 
 ML_PID=$!
 
-for attempt in $(seq 1 40); do
-    if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
+# Give reload mode a moment to warm up before polling
+sleep 6
+
+for attempt in $(seq 1 120); do
+    if py -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)" 2>/dev/null; then
         break
     fi
-    if [ "$attempt" -eq 40 ]; then
+    if [ "$attempt" -eq 120 ]; then
         echo "ERROR: ML backend did not become ready."
         exit 1
     fi
@@ -57,10 +53,10 @@ for attempt in $(seq 1 40); do
 done
 
 echo "[2/2] Starting voice worker (laptop mic and speaker)..."
-ML_API_URL="http://127.0.0.1:8000" python3 voice_agent.py &
+ML_API_URL="http://127.0.0.1:8000" py voice_agent.py &
 VOICE_PID=$!
 
-LAPTOP_IP="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')"
+LAPTOP_IP="$(powershell.exe -Command "(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { \$_.IPAddress -notlike '127.*' -and \$_.IPAddress -notlike '169.*' } | Select-Object -First 1).IPAddress" 2>/dev/null | tr -d '\r')"
 LAPTOP_IP="${LAPTOP_IP:-127.0.0.1}"
 
 echo ""
