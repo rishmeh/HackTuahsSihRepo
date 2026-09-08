@@ -12,7 +12,12 @@ Run modes:
   python voice_agent.py                   # wakeword mode — say "Hey Jarvis" first
   python voice_agent.py --mode continuous # always listening, no wake word needed
 """
-import argparse, os, sys, queue, urllib.request, warnings
+
+import os
+import sys
+import queue
+import urllib.request
+import warnings
 import numpy as np
 import requests
 
@@ -121,8 +126,7 @@ CHUNK            = 1280
 VAD_THRESHOLD    = 500
 SILENCE_DURATION = 1.5
 
-audio_queue: queue.Queue = queue.Queue()
-
+audio_queue = queue.Queue()
 
 def audio_callback(indata, frames, time, status):
     if status:
@@ -130,8 +134,19 @@ def audio_callback(indata, frames, time, status):
     audio_queue.put(indata.copy())
 
 
+def set_robot_state(state_name: str):
+    """Tell the FastAPI backend to update the robot face/servos."""
+    try:
+        requests.post("http://127.0.0.1:8000/hardware/control", json={
+            "face_state": state_name,
+            "servo_state": state_name
+        }, timeout=2)
+    except requests.exceptions.RequestException as e:
+        pass  # Fail silently if backend is down
+
 def speak_text(text: str):
     print(f"Agent: {text}")
+    set_robot_state("speaking")
     stream = (
         tts_voice.synthesize(text, syn_config=_SYN_CONFIG)
         if _SYN_CONFIG
@@ -139,12 +154,25 @@ def speak_text(text: str):
     )
     audio_bytes = b"".join(c.audio_int16_bytes for c in stream)
     if not audio_bytes:
+        set_robot_state("listening")
         return
-    sd.play(np.frombuffer(audio_bytes, dtype=np.int16), samplerate=22050)
+        
+    audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
+    
+    # Play synchronously (Piper lessac-medium is 22050 Hz)
+    sd.play(audio_array, samplerate=22050)
     sd.wait()
+    set_robot_state("listening")
 
+# ---------------------------------------------------------
+# 6. Filler lines while the backend is processing come from the persona's
+#    "thinking" pool — see _say() above.
+# ---------------------------------------------------------
 
-API_URL    = "http://127.0.0.1:8000/chat"
+# ---------------------------------------------------------
+# 7. Main Loop
+# ---------------------------------------------------------
+API_URL = "http://127.0.0.1:8000/chat"
 SESSION_ID = "voice-session-1"
 
 
@@ -161,16 +189,23 @@ def main():
     state = "RECORDING" if _ARGS.mode == "continuous" else "WAKEWORD"
     recorded_frames, silence_frames = [], 0
     max_silence_frames = int(RATE / CHUNK * SILENCE_DURATION)
-
-    with sd.InputStream(samplerate=RATE, channels=1, dtype="int16",
-                        blocksize=CHUNK, callback=audio_callback):
+    
+    with sd.InputStream(samplerate=RATE, channels=1, dtype='int16', blocksize=CHUNK, callback=audio_callback):
         while True:
             chunk = audio_queue.get()
-
+            
             if state == "WAKEWORD":
-                pred = oww_model.predict(chunk.flatten())
-                if any(s > 0.5 for s in pred.values()):
+                prediction = oww_model.predict(chunk.flatten())
+                
+                # Check if wakeword confidence exceeds threshold
+                confidence = 0.0
+                for model_name, score in prediction.items():
+                    if score > 0.5:
+                        confidence = score
+                
+                if confidence > 0.5:
                     print("\n[Wakeword Detected! Listening...]")
+                    set_robot_state("listening")
                     speak_text(_say("listening", Situation.LISTENING))
                     state = "RECORDING"
                     recorded_frames = []
@@ -186,7 +221,7 @@ def main():
                 if silence_frames > max_silence_frames:
                     print("[Silence detected, processing...]")
                     state = "PROCESSING"
-
+                    
                     full_audio = np.concatenate(recorded_frames, axis=0).flatten()
                     float_audio = full_audio.astype(np.float32) / 32768.0
 
@@ -237,6 +272,7 @@ def main():
                                         # Layer 2: LLM router (fast structured Ollama call).
                                         # voice_agent is synchronous, so asyncio.run() is safe here.
                                         import asyncio as _asyncio
+                                        set_robot_state("thinking")
                                         routed = _asyncio.run(llm_route(transcription))
                                         router_reply = (
                                             dispatch_intent(routed, profile_id=ACTIVE_PROFILE_ID)
@@ -249,6 +285,7 @@ def main():
                                         else:
                                             # Layer 3: full LLM chat
                                             speak_text(_say("thinking", Situation.THINKING))
+                                            set_robot_state("thinking")
                                             print("Sending to LLM backend...")
                                             payload = {
                                                 "query": transcription,
@@ -285,6 +322,11 @@ def main():
                     print(f"\nReady. {ready_msg}")
                     state = "RECORDING" if is_continuous else "WAKEWORD"
                     
+                    if state == "WAKEWORD":
+                        set_robot_state("idle")
+                    else:
+                        set_robot_state("listening")
+                        
                     recorded_frames = []
                     silence_frames = 0
                     

@@ -45,6 +45,7 @@ ml/
 ```bash
 cd ml
 pip install -r requirements.txt
+pip install -e ..    # installs vision/, learner/, persona/ packages (from pyproject.toml)
 python -m spacy download en_core_web_sm
 ```
 
@@ -72,14 +73,14 @@ uvicorn main:app --reload --port 8000
 API docs available at: http://localhost:8000/docs
 
 ### 6. Run the Voice Agent (STT & TTS)
-The repository includes a voice agent that uses **Moonshine STT**, **Piper TTS**, and **openWakeWord**. It listens for the wakeword `"Hey Jarvis"`.
+The repository includes a laptop voice worker that uses **Moonshine STT**, **Piper TTS**, and **openWakeWord**. It listens for `"Hey Jarvis"` through the laptop microphone and plays synthesized speech through the laptop's default speaker.
 
-1. Ensure your microphone is active.
-2. In a separate terminal (while the FastAPI server is running), execute:
+In a separate terminal while FastAPI is running, execute:
 ```bash
 python voice_agent.py
 ```
-*Note: The first time you run this, it will download the TTS and STT models automatically.*
+
+The first run downloads the speech models. The Pi does not send or receive audio.
 
 ---
 
@@ -182,9 +183,8 @@ Any SLM or External API failure returns the friendly fallback:
 ## Face Detection & Recognition
 
 Face detection and recognition live in the **`vision/` package at the
-repository root**, outside `ml/`, so the robot's camera loop can use them
-without pulling in the chat stack. Its endpoints are still served by this
-API — `main.py` mounts `vision.routes`.
+repository root** and execute on the laptop. The Pi sends JPEG frames to the
+hardware endpoint; `main.py` also mounts the face enrolment routes.
 
 See [../vision/README.md](../vision/README.md).
 

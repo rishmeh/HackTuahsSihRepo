@@ -67,9 +67,6 @@ class WebcamSource:
     """
     A laptop webcam via cv2.VideoCapture — the development front-end.
 
-    On the Raspberry Pi, write a PicameraSource with the same two methods and
-    pass that instead; nothing else in the codebase changes.
-
     Args:
         index: Camera index.
         width, height: Requested capture resolution.
@@ -132,6 +129,47 @@ class WebcamSource:
 
     def release(self) -> None:
         self._capture.release()
+
+
+class PicameraSource:
+    """
+    Raspberry Pi camera via picamera2.
+
+    Requires: pip install picamera2 and libcamera-apps.
+    Usage: just swap WebcamSource() for PicameraSource() in the CLI below.
+    """
+
+    def __init__(
+        self,
+        width: int = 640,
+        height: int = 480,
+    ) -> None:
+        try:
+            from picamera2 import Picamera2
+        except ImportError as exc:
+            raise RuntimeError(
+                "picamera2 is required for PicameraSource. "
+                "Install with: pip install picamera2"
+            ) from exc
+
+        self.picam2 = Picamera2()
+        config = self.picam2.create_preview_configuration(
+            main={"size": (width, height), "format": "RGB888"}
+        )
+        self.picam2.configure(config)
+        self.picam2.start()
+        logger.info("Picamera2 started at %dx%d", width, height)
+
+    def frames(self) -> Iterator[np.ndarray]:
+        while True:
+            rgb = self.picam2.capture_array()
+            yield cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+
+    def release(self) -> None:
+        try:
+            self.picam2.stop()
+        except Exception as exc:
+            logger.warning("Error stopping Picamera2: %s", exc)
 
 
 # ---------------------------------------------------------------------------

@@ -704,7 +704,7 @@ Build `Login.jsx`:
 - Clicking selects the student and navigates to the dashboard
 
 ### Step 1.2 — PIN gate (optional V1.5)
-If time permits, add a 4-digit xscreen before showing the dashboard. Store the PIN hash in the `students` table. Keep it simple — client-side check is fine for a home LAN demo.
+If time permits, add a 4-digit PIN screen before showing the dashboard. Store the PIN hash in the `students` table. Keep it simple — client-side check is fine for a home LAN demo.
 
 **Milestone:** Select a student → dashboard loads for that student. ✅
 
