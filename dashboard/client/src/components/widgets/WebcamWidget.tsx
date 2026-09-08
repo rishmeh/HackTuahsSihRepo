@@ -231,7 +231,8 @@ export function WebcamWidget() {
         {!on ? (
           <button
             onClick={startCamera}
-            className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium"
+            style={{ color: "#ffffff" }}
+            className="rounded-lg bg-primary !text-white px-3 py-1.5 text-xs font-medium"
           >
             Start Camera
           </button>
@@ -243,7 +244,12 @@ export function WebcamWidget() {
             <button onClick={detect} disabled={busy} className="rounded-lg border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50">
               Detect
             </button>
-            <button onClick={identify} disabled={busy} className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+            <button
+              onClick={identify}
+              disabled={busy}
+              style={{ color: "#ffffff" }}
+              className="rounded-lg bg-primary !text-white px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            >
               Identify
             </button>
           </>
@@ -263,7 +269,8 @@ export function WebcamWidget() {
           <button
             onClick={enroll}
             disabled={busy || !enrollName.trim()}
-            className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+            style={{ color: "#ffffff" }}
+            className="rounded-lg bg-primary !text-white px-3 py-1.5 text-xs font-medium disabled:opacity-50"
           >
             {busy ? "Enrolling…" : "Enroll"}
           </button>

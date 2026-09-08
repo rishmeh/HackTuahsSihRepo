@@ -135,14 +135,16 @@ export function TimerWidget() {
           <button
             onClick={handleStart}
             disabled={create.isPending || start.isPending}
-            className="flex-1 rounded-lg bg-primary text-primary-foreground py-1.5 text-sm font-medium disabled:opacity-50"
+            style={{ color: "#ffffff" }}
+            className="flex-1 rounded-lg bg-primary !text-white py-1.5 text-sm font-medium disabled:opacity-50"
           >
             Start
           </button>
         ) : (
           <button
             onClick={handleCancel}
-            className="flex-1 rounded-lg bg-destructive text-destructive-foreground py-1.5 text-sm font-medium"
+            style={{ color: "#ffffff" }}
+            className="flex-1 rounded-lg bg-destructive !text-white py-1.5 text-sm font-medium"
           >
             Cancel
           </button>

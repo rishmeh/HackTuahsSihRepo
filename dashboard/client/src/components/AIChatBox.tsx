@@ -256,7 +256,7 @@ export function AIChatBox({
                       className={cn(
                         "max-w-[80%] rounded-lg px-4 py-2.5",
                         message.role === "user"
-                          ? "bg-primary text-primary-foreground"
+                          ? "bg-primary text-white"
                           : "bg-muted text-foreground"
                       )}
                     >

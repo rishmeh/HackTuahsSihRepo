@@ -80,9 +80,10 @@ export function AlarmWidget() {
           <button
             key={i}
             onClick={() => toggleDay(i)}
+            style={repeatDays.includes(i) ? { color: "#ffffff" } : undefined}
             className={`w-7 h-7 rounded-full text-xs font-medium border ${
               repeatDays.includes(i)
-                ? "bg-primary text-primary-foreground border-primary"
+                ? "bg-primary !text-white border-primary"
                 : "bg-background text-muted-foreground border-border"
             }`}
           >
@@ -94,7 +95,8 @@ export function AlarmWidget() {
       <button
         onClick={add}
         disabled={create.isPending}
-        className="rounded-lg bg-primary text-primary-foreground py-1.5 text-sm font-medium disabled:opacity-50"
+        style={{ color: "#ffffff" }}
+        className="rounded-lg bg-primary !text-white py-1.5 text-sm font-medium disabled:opacity-50"
       >
         Add Alarm
       </button>

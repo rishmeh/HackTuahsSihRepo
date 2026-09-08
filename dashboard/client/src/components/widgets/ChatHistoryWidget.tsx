@@ -41,7 +41,7 @@ export function ChatHistoryWidget({ sessionId }: { sessionId: string }) {
             key={i}
             className={`text-sm px-3 py-2 rounded-xl max-w-[88%] ${
               m.role === "user"
-                ? "self-end bg-primary text-primary-foreground"
+                ? "self-end bg-primary text-white"
                 : "self-start bg-muted text-foreground"
             }`}
           >

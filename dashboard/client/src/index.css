@@ -76,13 +76,21 @@
   --shadow-hover: 0 22px 56px rgba(23, 50, 77, 0.11), 0 4px 12px rgba(23, 50, 77, 0.05);
 }
 
-* { box-sizing: border-box; }
-html { min-width: 320px; background: var(--cream); }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--cream); color: var(--navy); font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-button, input, textarea, select { font: inherit; }
-button { color: inherit; }
-button:not(:disabled), [role="button"]:not([aria-disabled="true"]), a[href] { cursor: pointer; }
-button:focus-visible, a:focus-visible { outline: 3px solid rgba(233, 117, 91, 0.35); outline-offset: 3px; }
+@layer base {
+  * { box-sizing: border-box; }
+  html { min-width: 320px; background: var(--cream); }
+  body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--cream); color: var(--navy); font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  button, input, textarea, select { font: inherit; }
+  button:not([class*="text-"]):not([class*="bg-primary"]):not([class*="bg-violet"]):not([class*="bg-purple"]) { color: inherit; }
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]), a[href] { cursor: pointer; }
+  button:focus-visible, a:focus-visible { outline: 3px solid rgba(233, 117, 91, 0.35); outline-offset: 3px; }
+}
+
+button.bg-primary,
+button[class*="bg-primary"],
+.bg-primary:is(button, [role="button"]) {
+  color: #ffffff !important;
+}
 
 .app-shell { min-height: 100vh; display: flex; background: var(--cream); }
 .app-sidebar { width: 252px; flex: 0 0 252px; min-height: 100vh; padding: 28px 17px 22px; display: flex; flex-direction: column; background: var(--navy); color: rgba(255, 253, 249, 0.72); position: sticky; top: 0; height: 100vh; overflow: hidden; z-index: 20; }
@@ -156,7 +164,8 @@ h1 { margin-top: 8px; color: var(--navy); font-size: clamp(35px, 4vw, 50px); lin
 .page-intro p { color: var(--ink-soft); font-size: 13px; margin-top: 10px; }
 .help-link { border: 0; background: transparent; display: flex; align-items: center; gap: 7px; color: var(--navy); font-size: 10px; font-weight: 800; padding: 7px 0; border-bottom: 1px solid var(--navy); }
 .help-link:hover { color: var(--coral); border-color: var(--coral); }
-.metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 13px; }
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 13px; }
+.student-page .metrics-grid { max-width: 500px; }
 .metric-card { min-height: 108px; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; position: relative; color: var(--navy); background: var(--paper); }
 .metric-card--coral { background: var(--coral-soft); border-color: rgba(233,117,91,.35); }
 .metric-card--navy { background: #eaeff3; border-color: rgba(23,50,77,.16); }

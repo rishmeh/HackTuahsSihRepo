@@ -104,7 +104,7 @@ export function VoiceButton({ profileId = 0 }: { profileId?: number }) {
   }, []);
 
   const COLOR: Record<State, string> = {
-    idle:      quizActive ? "bg-violet-600 text-white hover:bg-violet-700" : "bg-primary text-primary-foreground hover:opacity-90",
+    idle:      quizActive ? "bg-violet-600 text-white hover:bg-violet-700" : "bg-primary text-white hover:opacity-90",
     listening: "bg-red-500 text-white animate-pulse",
     thinking:  "bg-muted text-muted-foreground cursor-not-allowed",
   };
@@ -129,7 +129,8 @@ export function VoiceButton({ profileId = 0 }: { profileId?: number }) {
       <button
         onClick={activate}
         disabled={state !== "idle"}
-        className={`rounded-xl px-4 py-3 text-sm font-medium transition-all ${COLOR[state]}`}
+        style={state !== "thinking" ? { color: "#ffffff" } : undefined}
+        className={`rounded-xl px-4 py-3 text-sm font-medium transition-all ${COLOR[state]} ${state !== "thinking" ? "!text-white" : ""}`}
       >
         {LABEL[state]}
       </button>

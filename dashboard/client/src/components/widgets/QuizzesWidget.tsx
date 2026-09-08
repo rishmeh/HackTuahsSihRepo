@@ -81,7 +81,7 @@ function QuizCard({ quiz, onDelete }: { quiz: { id: number; topic: string; quest
               <div className="text-3xl mb-2">{score === totalQ ? "🏆" : score >= totalQ / 2 ? "🎉" : "💪"}</div>
               <p className="font-bold text-lg">{score} / {totalQ} correct</p>
               <p className="text-sm text-muted-foreground mb-3">{score === totalQ ? "Perfect!" : "Keep it up!"}</p>
-              <button onClick={resetQuiz} className="text-xs rounded-lg bg-purple-600 text-white px-3 py-1.5 hover:bg-purple-700 transition-colors">Try Again</button>
+              <button onClick={resetQuiz} style={{ color: "#ffffff" }} className="text-xs rounded-lg bg-purple-600 !text-white px-3 py-1.5 hover:bg-purple-700 transition-colors font-medium">Try Again</button>
             </div>
           ) : (
             <>
@@ -94,7 +94,7 @@ function QuizCard({ quiz, onDelete }: { quiz: { id: number; topic: string; quest
               </div>
               <p className="font-medium text-sm mb-3 leading-snug">{q.question}</p>
               {q.options && q.options.length > 0 ? (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2.5">
                   {q.options.map((opt, i) => {
                     const isSelected = selected === opt;
                     const isCorrect = revealed && (opt.toLowerCase().startsWith(q.answer[0]?.toLowerCase() ?? "") || opt.toLowerCase() === q.answer.toLowerCase());
@@ -103,7 +103,7 @@ function QuizCard({ quiz, onDelete }: { quiz: { id: number; topic: string; quest
                         key={i}
                         onClick={() => handleAnswer(opt)}
                         disabled={revealed}
-                        className={`text-left text-xs rounded-xl px-3 py-2 border transition-all ${
+                        className={`text-left text-xs rounded-xl px-3 py-2.5 border transition-all min-h-[38px] ${
                           isCorrect ? "bg-green-100 border-green-400 dark:bg-green-900/30 dark:border-green-600 font-medium" :
                           isSelected && revealed ? "bg-red-100 border-red-400 dark:bg-red-900/30 dark:border-red-600" :
                           isSelected ? "bg-purple-100 border-purple-400 dark:bg-purple-900/30 dark:border-purple-500" :
@@ -121,9 +121,9 @@ function QuizCard({ quiz, onDelete }: { quiz: { id: number; topic: string; quest
                 </p>
               )}
               {revealed && (
-                <div className="mt-2">
+                <div className="mt-3">
                   {q.explanation && <p className="text-xs text-muted-foreground mt-1 mb-2 italic">{q.explanation}</p>}
-                  <button onClick={handleNext} className="text-xs rounded-lg bg-purple-600 text-white px-3 py-1.5 hover:bg-purple-700 transition-colors w-full mt-1">
+                  <button onClick={handleNext} style={{ color: "#ffffff" }} className="text-xs rounded-lg bg-purple-600 !text-white px-3 py-2.5 hover:bg-purple-700 transition-colors w-full mt-1 font-semibold min-h-[38px]">
                     {currentQ < totalQ - 1 ? "Next Question →" : "See Results"}
                   </button>
                 </div>
@@ -152,7 +152,7 @@ export function QuizzesWidget({ profileId }: { profileId: number }) {
         </span>
       </div>
 
-      <div className="flex flex-col gap-2 max-h-96 overflow-y-auto pr-1">
+      <div className="flex flex-col gap-2 max-h-[600px] overflow-y-auto pr-1">
         {(quizList ?? []).map((quiz) => (
           <QuizCard
             key={quiz.id}

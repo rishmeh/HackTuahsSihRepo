@@ -78,7 +78,8 @@ export function NotesWidget() {
           <button
             onClick={() => create.mutate({ title: title || "Untitled", content, color })}
             disabled={create.isPending}
-            className="rounded-lg bg-primary text-primary-foreground py-1.5 text-sm font-medium disabled:opacity-50"
+            style={{ color: "#ffffff" }}
+            className="rounded-lg bg-primary !text-white py-1.5 text-sm font-medium disabled:opacity-50"
           >
             Save Note
           </button>
