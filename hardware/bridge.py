@@ -42,6 +42,7 @@ class PeripheralDaemon:
         body_pin: int = 13,
         camera_index: int = 0,
         camera_type: str = "auto",
+        display_driver: str = "hdmi",
         display_width: int = 800,
         display_height: int = 480,
         fullscreen: bool = True,
@@ -58,11 +59,13 @@ class PeripheralDaemon:
 
         self.http = httpx.Client(timeout=30.0, base_url=self.laptop_url)
         self.servos = ServoController(head_pin=head_pin, body_pin=body_pin)
-        self.display = Display(
-            width=display_width,
-            height=display_height,
-            fullscreen=fullscreen,
-        )
+        if display_driver == "st7789v":
+            from hardware.st7789v_display import ST7789VDisplay
+            self.display = ST7789VDisplay()
+        elif display_driver == "hdmi":
+            self.display = Display(width=display_width, height=display_height, fullscreen=fullscreen)
+        else:
+            raise ValueError("DISPLAY_DRIVER must be hdmi or st7789v")
         self.camera: Optional[CameraCapture] = None
         self._poll_thread: Optional[threading.Thread] = None
         self._camera_thread: Optional[threading.Thread] = None
@@ -254,6 +257,7 @@ def main() -> None:
     PeripheralDaemon(
         camera_index=int(os.getenv("CAMERA_INDEX", "0")),
         camera_type=os.getenv("CAMERA_TYPE", "auto"),
+        display_driver=os.getenv("DISPLAY_DRIVER", "hdmi").lower(),
         display_width=int(os.getenv("DISPLAY_WIDTH", "800")),
         display_height=int(os.getenv("DISPLAY_HEIGHT", "480")),
         fullscreen=os.getenv("DISPLAY_FULLSCREEN", "true").lower() == "true",

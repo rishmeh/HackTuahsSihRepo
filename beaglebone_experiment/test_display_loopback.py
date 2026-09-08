@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""ST7789V loopback test — verify SPI data is actually reaching the panel.
-This test checks if the panel is sending back valid data on MISO."""
-import spidev
-import gpiod
+"""ST7789V loopback test — verify SPI data is actually reaching the panel."""
+try:
+    import spidev
+    import gpiod
+except ImportError:
+    print("This test requires spidev and gpiod (BeagleBone only).")
+    raise SystemExit(0)
 import time
 
 def gpio_init(n):

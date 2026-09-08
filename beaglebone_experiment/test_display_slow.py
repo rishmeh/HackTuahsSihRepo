@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """ST7789V test at very slow SPI speed for debugging."""
-import spidev
-import gpiod
+try:
+    import spidev
+    import gpiod
+except ImportError:
+    print("This test requires spidev and gpiod (BeagleBone only).")
+    raise SystemExit(0)
 import time
 
 def gpio_init(n):

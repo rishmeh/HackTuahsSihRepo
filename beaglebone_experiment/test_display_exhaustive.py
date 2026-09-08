@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """ST7789V exhaustive test — tries all SPI modes, CS polarities, and init variations."""
-import spidev
-import gpiod
+try:
+    import spidev
+    import gpiod
+except ImportError:
+    print("This test requires spidev and gpiod (BeagleBone only).")
+    raise SystemExit(0)
 import time
 
 def gpio_init(n):

@@ -10,7 +10,7 @@ Use 64-bit Raspberry Pi OS Bookworm:
 ```bash
 sudo apt update
 sudo apt install -y python3-venv python3-picamera2 python3-opencv \
-  python3-gpiozero python3-lgpio python3-pygame
+  python3-gpiozero python3-lgpio python3-pygame python3-pil python3-spidev
 
 cd ~/TableTot
 python3 -m venv --system-site-packages .venv-pi
@@ -22,6 +22,14 @@ cp hardware/.env.pi.example hardware/.env.pi
 Edit `hardware/.env.pi` and set the laptop IP. The
 `--system-site-packages` option exposes the Raspberry Pi OS Picamera2 and GPIO
 packages inside the environment.
+
+For the pictured 240x320 GMT020-02-8P ST7789V SPI panel, enable SPI once and
+reboot. Keep `DISPLAY_DRIVER=st7789v` in `hardware/.env.pi`.
+
+```bash
+sudo raspi-config nonint do_spi 0
+sudo reboot
+```
 
 ## Laptop installation and startup
 
@@ -67,6 +75,9 @@ Run on the Pi after the laptop reports healthy:
 ```bash
 python3 hardware/test_servos.py
 python3 hardware/test_camera.py
+# For DISPLAY_DRIVER=st7789v:
+python3 hardware/test_st7789v_faces.py
+# For DISPLAY_DRIVER=hdmi instead:
 python3 hardware/test_display.py --fullscreen
 python3 hardware/test_state_poll.py
 ```

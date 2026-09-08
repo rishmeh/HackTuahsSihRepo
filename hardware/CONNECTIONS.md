@@ -5,7 +5,7 @@ The current Raspberry Pi 5 assembly has four peripherals:
 1. One camera
 2. One head servo
 3. One body servo
-4. One IPS face display
+4. One IPS face display (HDMI or the wired SPI ST7789V below)
 
 The laptop uses its own microphone and speakers. There is no PIR sensor or
 Pi-connected audio device in this version.
@@ -62,7 +62,27 @@ CAMERA_INDEX=0
 The Pi captures 640 x 480 frames and JPEG-encodes them at quality 70. It does
 not run OpenCV inference or store face images.
 
-## IPS display
+## ST7789V SPI IPS display (pictured GMT020-02-8P, 240 x 320)
+
+The pictured layout is **not HDMI**. It is an SPI display and uses the
+following physical Pi header pins. Power it at 3.3 V only.
+
+| TFT pin | Pi physical pin | BCM GPIO / role |
+|---|---:|---|
+| BL | 21 | GPIO9, backlight |
+| CS | 24 | GPIO8, SPI0 CE0 |
+| DC | 22 | GPIO25 |
+| RST | 18 | GPIO24 |
+| SDA | 19 | GPIO10, SPI0 MOSI |
+| SCL | 23 | GPIO11, SPI0 SCLK |
+| VCC | 17 | 3.3 V |
+| GND | 20 | Ground |
+
+GPIO9 is normally SPI MISO, but this one-way TFT does not use MISO; it is used
+here only for the separate backlight wire. Do not connect the TFT to 5 V. SPI0
+must be enabled before testing; see `hardware/test_st7789v_faces.py`.
+
+## HDMI IPS display
 
 The active software supports an HDMI IPS display through Pygame:
 
@@ -74,8 +94,8 @@ The active software supports an HDMI IPS display through Pygame:
 4. Set `DISPLAY_WIDTH` and `DISPLAY_HEIGHT` in `hardware/.env.pi` to the
    panel's native resolution. The supplied default is 800 x 480.
 
-This wiring applies to an HDMI IPS panel. A bare SPI/GPIO or DSI panel uses a
-different connection and driver; identify its exact model before wiring it.
+This section applies only to an HDMI IPS panel. Set `DISPLAY_DRIVER=hdmi` for
+that configuration. Set `DISPLAY_DRIVER=st7789v` for the SPI wiring above.
 
 ## Laptop hardware
 
