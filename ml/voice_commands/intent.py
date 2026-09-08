@@ -147,6 +147,18 @@ _LOCATION = re.compile(
 _TIME = re.compile(
     r"what(?:'s|s| is)\s+the\s+(?:current\s+)?time|time\s+(?:is\s+it|now)|current\s+time", re.I)
 
+_PERSONA_SETUP = re.compile(
+    r"(?:help\s+me\s+(?:set\s*up|setup)|(?:set\s*up|setup)|customi[sz]e|personalize|change)\s+"
+    r"(?:my\s+)?(?:assistant\s+)?(?:persona|personality)"
+    r"|personalize\s+(?:my\s+)?assistant",
+    re.I,
+)
+
+_PERSONA_CANCEL = re.compile(
+    r"(?:cancel|stop|quit|exit)\s+(?:the\s+)?(?:persona|personality)\s+(?:set\s*up|setup)",
+    re.I,
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -183,6 +195,10 @@ def parse(text: str) -> Intent:
     Returns Intent("unknown") when no pattern matches — caller should then
     try the LLM router before falling through to the full chat pipeline.
     """
+    # ── Persona setup (must not fall through to general chat) ────────────────
+    if _PERSONA_CANCEL.search(text): return Intent("cancel_persona_setup")
+    if _PERSONA_SETUP.search(text): return Intent("start_persona_setup")
+
     # ── List queries (check before create to avoid false matches) ─────────────
     if _LIST_TIMERS.search(text): return Intent("list_timers")
     if _LIST_ALARMS.search(text): return Intent("list_alarms")

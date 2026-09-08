@@ -42,9 +42,14 @@ _OPENROUTER_SYSTEM_PROMPT = textwrap.dedent("""\
 async def call_openrouter(
     sanitized_query: str,
     history: Optional[list[dict[str, str]]] = None,
+    *,
+    system_prompt: Optional[str] = None,
 ) -> Optional[str]:
     """
     Send the *already-sanitized* query (+ optional history) to OpenRouter.
+
+    ``system_prompt`` may be the locally generated, policy-derived Tot prompt.
+    It contains no student identity or raw questionnaire answers.
 
     history: list of {"role": "user"|"assistant", "content": "..."} dicts.
              All entries are already sanitized and safety-filtered, so it
@@ -62,8 +67,9 @@ async def call_openrouter(
     history = history or []
     query = sanitized_query[: config.MAX_QUERY_LENGTH]
 
+    prompt = system_prompt or _OPENROUTER_SYSTEM_PROMPT
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": _OPENROUTER_SYSTEM_PROMPT},
+        {"role": "system", "content": prompt},
         *history,
         {"role": "user", "content": query},
     ]

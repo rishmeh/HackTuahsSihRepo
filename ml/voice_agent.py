@@ -45,6 +45,7 @@ from persona.voice import voice_params
 from voice_commands.intent import parse as parse_intent
 from voice_commands.dispatcher import dispatch as dispatch_intent
 from voice_commands.router import llm_route
+from persona_setup import sessions as persona_sessions
 
 _SETTINGS = default_settings(age=10)
 _PHRASES  = PhraseBook()
@@ -76,9 +77,9 @@ def _synthesis_config():
 
 _SYN_CONFIG = _synthesis_config()
 
-# Profile ID of the active user (0 = guest/unknown).
-# Set this to the recognised student's ID when face recognition identifies them.
-ACTIVE_PROFILE_ID: int = 0
+# Profile ID of the active user (0 = guest/unknown). Face recognition can
+# replace this later; for laptop testing set TABLETOT_PROFILE_ID before launch.
+ACTIVE_PROFILE_ID: int = int(os.getenv("TABLETOT_PROFILE_ID", "0"))
 
 PIPER_MODEL_NAME = "en_US-lessac-medium.onnx"
 PIPER_MODEL_URL  = (
@@ -187,50 +188,68 @@ def main():
                             print(f"You said: {transcription}")
 
                             if transcription:
-                                # Layer 1: regex intent parser (instant)
+                                profile_key = str(ACTIVE_PROFILE_ID)
                                 intent = parse_intent(transcription)
-                                quick_reply = dispatch_intent(intent, profile_id=ACTIVE_PROFILE_ID) \
-                                    if intent.name != "unknown" else None
 
-                                if quick_reply:
-                                    speak_text(quick_reply)
-                                else:
-                                    # Layer 2: LLM router (fast structured Ollama call)
-                                    # voice_agent is synchronous — asyncio.run() is safe here
-                                    import asyncio as _asyncio
-                                    routed = _asyncio.run(llm_route(transcription))
-                                    router_reply = (
-                                        dispatch_intent(routed, profile_id=ACTIVE_PROFILE_ID)
-                                        if routed and routed.name != "unknown"
-                                        else None
-                                    )
-
-                                    if router_reply:
-                                        speak_text(router_reply)
+                                # Persona setup owns the next utterance until it completes
+                                # or the user explicitly cancels it. This prevents answers
+                                # being misrouted into the normal command/chat path.
+                                if persona_sessions.is_active(profile_key):
+                                    if intent.name == "cancel_persona_setup":
+                                        persona_sessions.cancel(profile_key)
+                                        speak_text("Okay, I cancelled persona setup. Your existing persona is unchanged.")
                                     else:
-                                        # Layer 3: full LLM chat
-                                        speak_text(_say("thinking", Situation.THINKING))
-                                        print("Sending to LLM backend...")
-                                        payload = {
-                                            "query": transcription,
-                                            "student": {
-                                                "name": "Voice User", "age": 10,
-                                                "grade": "5th grade",
-                                                "personality_traits": ["curious"],
-                                                "interests": [], "language_level": "intermediate",
-                                            },
-                                            "session_id": SESSION_ID,
-                                        }
-                                        try:
-                                            r = requests.post(API_URL, json=payload, timeout=150)
-                                            if r.status_code == 200:
-                                                speak_text(r.json().get("answer", "No answer found."))
-                                            else:
-                                                print(f"API Error: {r.status_code}")
+                                        _, reply, _ = persona_sessions.answer(
+                                            profile_key, transcription, age=10
+                                        )
+                                        speak_text(reply)
+                                elif intent.name == "start_persona_setup":
+                                    speak_text(persona_sessions.start(profile_key, age=10))
+                                else:
+                                    # Layer 1: regex intent parser (instant)
+                                    quick_reply = dispatch_intent(intent, profile_id=ACTIVE_PROFILE_ID) \
+                                        if intent.name != "unknown" else None
+
+                                    if quick_reply:
+                                        speak_text(quick_reply)
+                                    else:
+                                        # Layer 2: LLM router (fast structured Ollama call).
+                                        # voice_agent is synchronous, so asyncio.run() is safe here.
+                                        import asyncio as _asyncio
+                                        routed = _asyncio.run(llm_route(transcription))
+                                        router_reply = (
+                                            dispatch_intent(routed, profile_id=ACTIVE_PROFILE_ID)
+                                            if routed and routed.name != "unknown"
+                                            else None
+                                        )
+
+                                        if router_reply:
+                                            speak_text(router_reply)
+                                        else:
+                                            # Layer 3: full LLM chat
+                                            speak_text(_say("thinking", Situation.THINKING))
+                                            print("Sending to LLM backend...")
+                                            payload = {
+                                                "query": transcription,
+                                                "student": {
+                                                    "name": "Voice User", "age": 10,
+                                                    "grade": "5th grade",
+                                                    "personality_traits": ["curious"],
+                                                    "interests": [], "language_level": "intermediate",
+                                                },
+                                                "session_id": SESSION_ID,
+                                                "student_id": profile_key,
+                                            }
+                                            try:
+                                                r = requests.post(API_URL, json=payload, timeout=150)
+                                                if r.status_code == 200:
+                                                    speak_text(r.json().get("answer", "No answer found."))
+                                                else:
+                                                    print(f"API Error: {r.status_code}")
+                                                    speak_text(_say("error", Situation.ERROR))
+                                            except requests.exceptions.RequestException as e:
+                                                print(f"Connection Error: {e}")
                                                 speak_text(_say("error", Situation.ERROR))
-                                        except requests.exceptions.RequestException as e:
-                                            print(f"Connection Error: {e}")
-                                            speak_text(_say("error", Situation.ERROR))
 
                         except Exception as e:
                             print(f"Error during processing: {e}")

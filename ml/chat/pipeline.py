@@ -87,15 +87,22 @@ def _persona_for(request: ChatRequest) -> _Persona:
     STRICT RULES and JSON schema intact — compose_system_prompt refuses to
     proceed otherwise.
     """
-    settings = None
+    stored = None
     if request.student_id:
         stored = _learner_store().get(request.student_id)
-        if stored is not None:
-            settings = derive_settings(stored.profile)
-        else:
-            logger.info("No learner profile for %r; using default persona", request.student_id)
-    if settings is None:
-        settings = default_settings(age=request.student.age)
+
+    settings = (
+        derive_settings(stored.profile)
+        if stored is not None
+        else default_settings(age=request.student.age)
+    )
+    logger.info(
+        "Persona resolved | student_id=%r | source=%s | mode=%s | directives=%d",
+        request.student_id,
+        "stored" if stored is not None else "default",
+        settings.persona_mode,
+        len(settings.prompt_directives),
+    )
 
     return _Persona(
         system_prompt=compose_system_prompt(BASE_SYSTEM_PROMPT, build_persona_block(settings)),
@@ -280,7 +287,9 @@ async def _escalate_via_openrouter(
     persona: _Persona,
 ) -> ChatResponse:
     """Forward to OpenRouter — sends only sanitized query + sanitized history (no PII)."""
-    openrouter_answer = await call_openrouter(sanitized_query, history)
+    openrouter_answer = await call_openrouter(
+        sanitized_query, history, system_prompt=persona.system_prompt
+    )
 
     if openrouter_answer is None:
         logger.error("OpenRouter returned None. Falling back to SLM answer.")

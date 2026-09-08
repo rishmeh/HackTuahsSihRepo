@@ -34,6 +34,7 @@ from alarms.routes import router as alarms_router
 from alarms.scheduler import start_scheduler
 from weather.routes import router as weather_router
 from notes.routes import router as notes_router
+from persona_setup.router import router as persona_setup_router
 from tasks_proxy import router as tasks_proxy_router
 from ws_manager import manager
 import config
@@ -59,6 +60,7 @@ app.include_router(learner_router)
 app.include_router(alarms_router)
 app.include_router(weather_router)
 app.include_router(notes_router)
+app.include_router(persona_setup_router)
 app.include_router(tasks_proxy_router)
 
 
@@ -123,12 +125,38 @@ async def voice_text_command(body: dict):
     if not text:
         return {"transcription": "", "response": "I didn't catch that."}
 
+    from persona_setup import sessions as persona_sessions
     from voice_commands.intent import parse as _parse
     from voice_commands.dispatcher import dispatch as _dispatch
     from voice_commands.router import llm_route
 
+    profile_key = str(profile_id)
+    if persona_sessions.is_active(profile_key):
+        if _parse(text).name == "cancel_persona_setup":
+            persona_sessions.cancel(profile_key)
+            return {
+                "transcription": text,
+                "response": "Okay, I cancelled persona setup. Your existing persona is unchanged.",
+                "persona_setup_active": False,
+                "persona_setup_complete": False,
+            }
+        _, reply, complete = persona_sessions.answer(profile_key, text, age=10)
+        return {
+            "transcription": text,
+            "response": reply,
+            "persona_setup_active": not complete,
+            "persona_setup_complete": complete,
+        }
+
     # Layer 1: regex
     intent = _parse(text)
+    if intent.name == "start_persona_setup":
+        return {
+            "transcription": text,
+            "response": persona_sessions.start(profile_key, age=10),
+            "persona_setup_active": True,
+            "persona_setup_complete": False,
+        }
     if intent.name != "unknown":
         reply = _dispatch(intent, profile_id=profile_id)
         if reply:
@@ -149,6 +177,7 @@ async def voice_text_command(body: dict):
             personality_traits=["curious"], interests=[], language_level="intermediate",
         ),
         session_id=f"voice-browser-{profile_id}",
+        student_id=profile_key,
     )
     chat_resp = await run_chat_pipeline(req)
     return {"transcription": text, "response": chat_resp.answer}
