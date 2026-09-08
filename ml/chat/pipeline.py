@@ -38,7 +38,6 @@ from dataclasses import dataclass
 
 import config
 from chat.complexity_judge import evaluate_pre_slm, evaluate_post_slm
-from chat.openrouter_client import call_openrouter
 from chat.models import ChatRequest, ChatResponse, EscalationReason
 from chat.safety_filter import apply_safety_filter
 from chat.sanitizer import sanitize
@@ -204,24 +203,18 @@ async def run_chat_pipeline(request: ChatRequest) -> ChatResponse:
             )
 
     # ------------------------------------------------------------------
-    # Step 6: Escalation — branch on ESCALATION_MODE
+    # Step 6: Escalation — always use model_thinking (Ollama)
     # ------------------------------------------------------------------
     conf_log = slm_response.confidence if slm_response else 0.0
     logger.info(
-        "Escalating. Mode=%s | Reason: %s | SLM confidence: %.2f",
-        config.ESCALATION_MODE,
+        "Escalating via thinking mode | Reason: %s | SLM confidence: %.2f",
         escalation_reason,
         conf_log,
     )
 
-    if config.ESCALATION_MODE == "model_thinking":
-        return await _escalate_via_thinking(
-            sanitized_query, request, history, escalation_reason, slm_response, persona
-        )
-    else:
-        return await _escalate_via_openrouter(
-            sanitized_query, request, history, escalation_reason, slm_response, persona
-        )
+    return await _escalate_via_thinking(
+        sanitized_query, request, history, escalation_reason, slm_response, persona
+    )
 
 
 async def _escalate_via_thinking(
@@ -278,51 +271,4 @@ async def _escalate_via_thinking(
         )
 
 
-async def _escalate_via_openrouter(
-    sanitized_query: str,
-    request: ChatRequest,
-    history: list[dict[str, str]],
-    escalation_reason: EscalationReason,
-    slm_response,
-    persona: _Persona,
-) -> ChatResponse:
-    """Forward to OpenRouter — sends only sanitized query + sanitized history (no PII)."""
-    openrouter_answer = await call_openrouter(
-        sanitized_query, history, system_prompt=persona.system_prompt
-    )
 
-    if openrouter_answer is None:
-        logger.error("OpenRouter returned None. Falling back to SLM answer.")
-        fallback_text = (
-            slm_response.answer if slm_response and slm_response.answer
-            else config.FALLBACK_RESPONSE
-        )
-        filter_result = apply_safety_filter(fallback_text)
-        return ChatResponse(
-            answer=filter_result.text if filter_result.is_safe else config.FALLBACK_RESPONSE,
-            source="fallback",
-            escalated=True,
-            escalation_reason=escalation_reason,
-            session_id=request.session_id,
-        )
-
-    filter_result = apply_safety_filter(persona.apply(openrouter_answer))
-    if filter_result.is_safe:
-        if request.session_id:
-            append_turn(request.session_id, sanitized_query, filter_result.text)
-        return ChatResponse(
-            answer=filter_result.text,
-            source="openrouter",
-            escalated=True,
-            escalation_reason=escalation_reason,
-            session_id=request.session_id,
-        )
-    else:
-        logger.warning("OpenRouter answer blocked by safety filter: %s", filter_result.block_reason)
-        return ChatResponse(
-            answer=config.FALLBACK_RESPONSE,
-            source="fallback",
-            escalated=True,
-            escalation_reason=escalation_reason,
-            session_id=request.session_id,
-        )

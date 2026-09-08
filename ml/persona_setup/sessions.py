@@ -84,74 +84,28 @@ def _option_hint(q: dict) -> str:
 
 def _save_and_confirm(session: SetupSession) -> str:
     """Build a LearnerProfile from the collected answers and persist it."""
-    profile = _build_profile(session.age, session.answers)
+    from learner.scoring import score_answers
+    from learner.questionnaire import load_questionnaire
+
+    q = load_questionnaire()
+    profile = score_answers(session.answers, session.age, q)
+    
     store = ProfileStore(learner_config.LEARNER_DB_PATH)
     store.save(session.profile_id, profile)
     logger.info("Persona saved for profile_id=%r answers=%s", session.profile_id, session.answers)
 
-    tone = session.answers.get("tone", "warm")
-    mode = session.answers.get("persona_mode", "teacher")
-    fmt  = session.answers.get("explanation_format", "narrative")
+    # Pick a couple of top preferences to mention
+    fmt = profile.top("explanation_format") or "narrative"
+    mode = profile.top("persona_mode") or "teacher"
+    
+    # We don't have tone directly anymore, we have traits and constraints.
+    playful = "playful" in profile.constraints
+    
     return (
         f"Perfect! I've saved your persona. "
         f"I'll be your {mode}, explain things through {fmt.replace('_', ' ')}, "
-        f"and keep a {'playful' if tone == 'playful' else 'professional'} tone. "
+        f"and keep a {'playful' if playful else 'professional'} tone. "
         "You're all set — just talk to me normally from now on!"
-    )
-
-
-def _build_profile(age: int, answers: dict) -> LearnerProfile:
-    """Convert conversational answers into a scored LearnerProfile."""
-    fmt       = answers.get("explanation_format", "narrative")
-    length    = answers.get("response_length", "normal")
-    wrong     = answers.get("wrong_answer_style", "supportive")
-    pmode     = answers.get("persona_mode", "teacher")
-    motiv     = answers.get("motivation", "curiosity")
-    tone      = answers.get("tone", "playful")
-
-    def _dist(value: str, keys: list[str]) -> dict[str, float]:
-        """Put 1.0 on the chosen value, distribute 0.0 to others."""
-        return {k: (1.0 if k == value else 0.0) for k in keys}
-
-    preferences = {
-        "explanation_format": _dist(fmt, ["narrative", "structural", "concise", "socratic"]),
-        "persona_mode":       _dist(pmode, ["teacher", "peer", "socratic", "independent"]),
-        "motivation":         _dist(motiv, ["curiosity", "utility", "gap", "mastery"]),
-        # These weren't asked; keep neutral
-        "orientation": {v: 0.25 for v in ["overview", "explore", "social", "goal"]},
-        "skill_intro":  {v: 0.25 for v in ["observe", "trial", "steps", "guided"]},
-    }
-
-    # Map wrong-answer style to failure_sensitivity
-    fs = {"gentle": 0.75, "supportive": 0.5, "analytical": 0.25}[wrong]
-    traits = {
-        "failure_sensitivity":    fs,
-        "frustration_tolerance":  1.0 - fs,
-        "help_seeking":           0.7 if pmode in ("teacher", "socratic") else 0.4,
-        "confidence_expression":  0.3 if fs >= 0.7 else 0.65,
-        "social_orientation":     0.7 if tone == "playful" else 0.4,
-    }
-
-    constraints: list[str] = []
-    if length == "terse":
-        constraints.append("brevity")
-    if tone == "plain":
-        constraints.append("low_stakes")
-    if length == "detailed":
-        constraints.append("explain_why")
-    if tone == "playful":
-        constraints.append("playful")
-
-    return LearnerProfile(
-        questionnaire_version=2,          # voice setup version
-        age=age,
-        preferences=preferences,
-        traits=traits,
-        constraints=constraints,
-        confidence={k: 0.9 for k in preferences},
-        answers={i: list(answers.values())[i] for i in range(len(answers))},
-        answered=len(answers),
-        skipped=[],
     )
 
 
@@ -164,7 +118,7 @@ def start(profile_id: str, age: int) -> str:
     session = SetupSession(profile_id=profile_id, age=age)
     _sessions[profile_id] = session
     intro = (
-        "Let's set up your persona — I'll ask you six quick questions. "
+        "Let's set up your persona — I'll ask you ten quick questions. "
         "You can say a letter or just describe what you prefer. "
         "Say 'skip' at any time to use the default for that question. "
         + QUESTIONS[0]["ask"]

@@ -129,8 +129,19 @@ async def voice_text_command(body: dict):
     from voice_commands.intent import parse as _parse
     from voice_commands.dispatcher import dispatch as _dispatch
     from voice_commands.router import llm_route
+    from quiz_sessions import sessions as _quiz_sessions
 
     profile_key = str(profile_id)
+
+    # Quiz session intercepts all utterances while active
+    if _quiz_sessions.is_active(profile_key):
+        _intent = _parse(text)
+        if _intent.name == "cancel_quiz":
+            _quiz_sessions.cancel(profile_key)
+            return {"transcription": text, "response": "Quiz cancelled. Come back anytime!", "quiz_active": False}
+        reply, done = _quiz_sessions.answer(profile_key, text)
+        return {"transcription": text, "response": reply, "quiz_active": not done}
+
     if persona_sessions.is_active(profile_key):
         if _parse(text).name == "cancel_persona_setup":
             persona_sessions.cancel(profile_key)

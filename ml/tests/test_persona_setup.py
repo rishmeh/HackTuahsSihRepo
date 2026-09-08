@@ -21,7 +21,18 @@ def test_setup_saves_a_profile_and_applies_choices(tmp_path, monkeypatch):
     first = sessions.start(profile_id, age=14)
     assert "Question one" in first
 
-    answers = ["stories", "detailed", "analytical", "peer", "mastery", "professional"]
+    answers = [
+        "forest",      # Q1: explore
+        "hint",        # Q2: help_seeking
+        "figure",      # Q3: trial
+        "story",       # Q4: narrative
+        "raise",       # Q5: confidence
+        "curious",     # Q6: failure_sensitivity
+        "stories",     # Q7: narrative
+        "together",    # Q8: peer
+        "master",      # Q9: mastery
+        "explanation"  # Q10: explain_why -> detailed length
+    ]
     replies = []
     for index, answer in enumerate(answers):
         accepted, reply, complete = sessions.answer(profile_id, answer, age=14)

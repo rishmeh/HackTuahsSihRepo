@@ -21,7 +21,7 @@ export function ChatHistoryWidget({ sessionId }: { sessionId: string }) {
       if (!res.ok) return [];
       return res.json();
     },
-    refetchInterval: 20_000,
+    refetchInterval: 3000,
     enabled: !!sessionId,
   });
 

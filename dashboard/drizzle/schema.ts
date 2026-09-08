@@ -124,6 +124,25 @@ export const weatherCache = sqliteTable("weatherCache", {
   fetchedAt: integer("fetchedAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
+export const quizzes = sqliteTable("quizzes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerProfileId: integer("ownerProfileId").notNull(),
+  topic: text("topic").notNull(),
+  questions: text("questions").notNull().default("[]"),
+  score: integer("score"),
+  totalQuestions: integer("totalQuestions").notNull().default(0),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
+export const flashcardDecks = sqliteTable("flashcardDecks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  ownerProfileId: integer("ownerProfileId").notNull(),
+  topic: text("topic").notNull(),
+  cards: text("cards").notNull().default("[]"),
+  totalCards: integer("totalCards").notNull().default(0),
+  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type ProfileRow = typeof profiles.$inferSelect;
@@ -134,3 +153,5 @@ export type TimerRow = typeof timers.$inferSelect;
 export type AlarmRow = typeof alarms.$inferSelect;
 export type NoteRow = typeof notes.$inferSelect;
 export type ChatHistoryRow = typeof chatHistory.$inferSelect;
+export type QuizRow = typeof quizzes.$inferSelect;
+export type FlashcardDeckRow = typeof flashcardDecks.$inferSelect;

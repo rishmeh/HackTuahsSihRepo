@@ -1,134 +1,161 @@
 """
-persona_setup/questions.py — The six conversational persona questions.
+persona_setup/questions.py — The ten conversational persona questions.
 
 Each question is phrased for voice: short, clear options labelled A/B/C/D so
 the user can say a letter OR a keyword and both are accepted.
 
-The ``answer_map`` turns a raw STT transcript into the canonical value used by
-the learner policy (e.g. "stories" → "narrative").
+The ``answer_map`` turns a raw STT transcript into the canonical option key
+("A", "B", "C", "D") matching the options in `learner/questionnaire.json`.
 """
 from __future__ import annotations
 
 QUESTIONS: list[dict] = [
     {
-        "id": "explanation_format",
+        "id": 1,
         "ask": (
-            "Question one. How do you like things explained? "
-            "Say A for stories and real-life examples, "
-            "B for clear structured steps, "
-            "C for a quick list of key facts, "
-            "or D for questions that help you think it through yourself."
+            "Question one. In a mysterious world, where do you want to go first? "
+            "Say A for the tall tower, B for the forest, C for the village, or D straight to the question mark."
         ),
-        "dimension": "explanation_format",
-        "options": ["narrative", "structural", "concise", "socratic"],
+        "options": ["A", "B", "C", "D"],
         "answer_map": {
-            "a": "narrative",   "story": "narrative",    "stories": "narrative",
-            "example": "narrative", "examples": "narrative", "narrative": "narrative",
-            "b": "structural",  "structure": "structural", "steps": "structural",
-            "structured": "structural", "clear": "structural",
-            "c": "concise",     "list": "concise",   "facts": "concise",
-            "quick": "concise", "short": "concise",
-            "d": "socratic",    "question": "socratic", "questions": "socratic",
-            "think": "socratic", "socratic": "socratic", "myself": "socratic",
+            "a": "A", "tower": "A", "top": "A", "tall": "A",
+            "b": "B", "forest": "B", "trees": "B",
+            "c": "C", "village": "C", "people": "C",
+            "d": "D", "question": "D", "mark": "D", "straight": "D",
         },
     },
     {
-        "id": "response_length",
+        "id": 2,
         "ask": (
-            "Question two. How long should my replies be? "
-            "A for short and to the point — two or three sentences, "
-            "B for a normal paragraph, "
-            "or C for detailed explanations that always cover the why."
+            "Question two. A large stone blocks the path with a riddle. What do you do? "
+            "Say A to think hard and answer yourself, B to ask for a small hint, "
+            "C to ask me for the answer, or D to sit with it for a while."
         ),
-        "dimension": "response_length",
-        "options": ["terse", "normal", "detailed"],
+        "options": ["A", "B", "C", "D"],
         "answer_map": {
-            "a": "terse",    "short": "terse",    "brief": "terse",   "concise": "terse",
-            "quick": "terse", "point": "terse",
-            "b": "normal",   "normal": "normal",  "paragraph": "normal", "medium": "normal",
-            "c": "detailed", "detailed": "detailed", "detail": "detailed",
-            "long": "detailed", "everything": "detailed", "why": "detailed",
+            "a": "A", "think": "A", "myself": "A", "hard": "A",
+            "b": "B", "hint": "B", "small": "B",
+            "c": "C", "answer": "C", "tell": "C",
+            "d": "D", "sit": "D", "wait": "D", "while": "D",
         },
     },
     {
-        "id": "wrong_answer_style",
+        "id": 3,
         "ask": (
-            "Question three. When you get something wrong, how should I handle it? "
-            "A — gently, with encouragement and warmth, "
-            "B — straightforwardly with a clear correction, "
-            "or C — analytically, exploring why that answer was tempting."
+            "Question three. Villagers want to teach you how to make lanterns. How do you want to learn? "
+            "Say A to watch someone make one first, B to just figure it out yourself, "
+            "C to be told the steps one by one, or D to make one together with a guide."
         ),
-        "dimension": "wrong_answer_style",
-        "options": ["gentle", "supportive", "analytical"],
+        "options": ["A", "B", "C", "D"],
         "answer_map": {
-            "a": "gentle",     "gentle": "gentle",   "warm": "gentle",
-            "encourage": "gentle", "encouragement": "gentle", "sensitive": "gentle",
-            "b": "supportive", "supportive": "supportive", "clear": "supportive",
-            "straightforward": "supportive", "direct": "supportive",
-            "c": "analytical", "analytical": "analytical", "analyse": "analytical",
-            "analyze": "analytical", "explore": "analytical", "why": "analytical",
+            "a": "A", "watch": "A", "first": "A",
+            "b": "B", "figure": "B", "yourself": "B", "materials": "B",
+            "c": "C", "steps": "C", "told": "C", "one": "C",
+            "d": "D", "together": "D", "guide": "D",
         },
     },
     {
-        "id": "persona_mode",
+        "id": 4,
         "ask": (
-            "Question four. How should I behave with you? "
-            "A — like a teacher, guiding you step by step, "
-            "B — like a peer, working through things together, "
-            "C — like a Socratic mentor, asking questions to help you discover answers, "
-            "or D — stay out of your way and only help when asked."
+            "Question four. A storyteller offers to tell you about the world. How do you want to hear it? "
+            "Say A for a story with characters, B for a map with explanations, "
+            "C for a list of key facts, or D for her to just answer your questions."
         ),
-        "dimension": "persona_mode",
-        "options": ["teacher", "peer", "socratic", "independent"],
+        "options": ["A", "B", "C", "D"],
         "answer_map": {
-            "a": "teacher",     "teacher": "teacher",   "guide": "teacher",
-            "guiding": "teacher", "step": "teacher",
-            "b": "peer",        "peer": "peer",         "together": "peer",
-            "friend": "peer",   "buddy": "peer",        "colleague": "peer",
-            "c": "socratic",    "socratic": "socratic", "mentor": "socratic",
-            "question": "socratic", "discover": "socratic",
-            "d": "independent", "independent": "independent", "alone": "independent",
-            "way": "independent", "quiet": "independent",
+            "a": "A", "story": "A", "characters": "A",
+            "b": "B", "map": "B", "explanations": "B",
+            "c": "C", "list": "C", "facts": "C",
+            "d": "D", "questions": "D", "answer": "D", "just": "D",
         },
     },
     {
-        "id": "motivation",
+        "id": 5,
         "ask": (
-            "Question five. What motivates you most? "
-            "A — pure curiosity and exploration, "
-            "B — getting practical things done efficiently, "
-            "C — filling in gaps in your knowledge, "
-            "or D — mastering skills deeply."
+            "Question five. A wizard asks a riddle and you know the answer. What do you do? "
+            "Say A to shout it out right away, B to raise your hand, "
+            "C to wait to see if anyone else answers, or D to stay quiet."
         ),
-        "dimension": "motivation",
-        "options": ["curiosity", "utility", "gap", "mastery"],
+        "options": ["A", "B", "C", "D"],
         "answer_map": {
-            "a": "curiosity",  "curiosity": "curiosity", "curious": "curiosity",
-            "explore": "curiosity", "exploration": "curiosity",
-            "b": "utility",    "utility": "utility",  "practical": "utility",
-            "done": "utility", "efficient": "utility", "useful": "utility",
-            "c": "gap",        "gap": "gap",          "gaps": "gap",
-            "fill": "gap",     "knowledge": "gap",    "missing": "gap",
-            "d": "mastery",    "mastery": "mastery",  "master": "mastery",
-            "deep": "mastery", "deeply": "mastery",   "skill": "mastery",
+            "a": "A", "shout": "A", "right": "A", "away": "A",
+            "b": "B", "raise": "B", "hand": "B",
+            "c": "C", "wait": "C", "anyone": "C", "else": "C",
+            "d": "D", "stay": "D", "quiet": "D", "keep": "D", "myself": "D",
         },
     },
     {
-        "id": "tone",
+        "id": 6,
         "ask": (
-            "Last question. What tone do you prefer? "
-            "A — playful and fun, with a bit of humour and banter, "
-            "or B — professional and to the point, no banter."
+            "Question six. Someone answers confidently but gets it completely wrong. How do you feel? "
+            "Say A relieved it wasn't you, B curious why they thought that, "
+            "C feel a little bad for them, or D glad because mistakes help us learn."
         ),
-        "dimension": "tone",
-        "options": ["playful", "plain"],
+        "options": ["A", "B", "C", "D"],
         "answer_map": {
-            "a": "playful",  "playful": "playful", "fun": "playful",
-            "humor": "playful", "humour": "playful", "banter": "playful",
-            "funny": "playful", "jokes": "playful",  "warm": "playful",
-            "b": "plain",    "plain": "plain",  "professional": "plain",
-            "serious": "plain", "formal": "plain", "efficient": "plain",
-            "point": "plain",
+            "a": "A", "relieved": "A", "wasn't": "A", "me": "A",
+            "b": "B", "curious": "B", "why": "B",
+            "c": "C", "bad": "C", "feel": "C",
+            "d": "D", "glad": "D", "mistakes": "D", "learn": "D",
+        },
+    },
+    {
+        "id": 7,
+        "ask": (
+            "Question seven. You can take one book from the wizard's library. Which do you pick? "
+            "Say A for a book of maps and diagrams, B for a book of stories about travelers, "
+            "C for a book of answers to common questions, or D for a book that asks you questions."
+        ),
+        "options": ["A", "B", "C", "D"],
+        "answer_map": {
+            "a": "A", "maps": "A", "diagrams": "A",
+            "b": "B", "stories": "B", "travelers": "B", "travellers": "B",
+            "c": "C", "answers": "C", "common": "C",
+            "d": "D", "questions": "D", "asks": "D",
+        },
+    },
+    {
+        "id": 8,
+        "ask": (
+            "Question eight. What kind of companion do you want for the journey? "
+            "Say A for someone who knows the way and guides you, B for someone to figure things out with together, "
+            "C for someone who asks questions to help you think, or D you'd rather go alone."
+        ),
+        "options": ["A", "B", "C", "D"],
+        "answer_map": {
+            "a": "A", "knows": "A", "way": "A", "guides": "A", "teacher": "A",
+            "b": "B", "together": "B", "figure": "B", "peer": "B",
+            "c": "C", "asks": "C", "questions": "C", "think": "C", "socratic": "C",
+            "d": "D", "alone": "D", "pace": "D", "independent": "D",
+        },
+    },
+    {
+        "id": 9,
+        "ask": (
+            "Question nine. In a room full of things to learn, what do you pick first? "
+            "Say A for something you're curious about, B for something useful, "
+            "C for something you've struggled with, or D for something you want to master deeply."
+        ),
+        "options": ["A", "B", "C", "D"],
+        "answer_map": {
+            "a": "A", "curious": "A", "curiosity": "A",
+            "b": "B", "useful": "B", "utility": "B",
+            "c": "C", "struggled": "C", "struggle": "C", "fix": "C", "gap": "C",
+            "d": "D", "master": "D", "deeply": "D", "deeper": "D",
+        },
+    },
+    {
+        "id": 10,
+        "ask": (
+            "Last question. What should I never do when helping you? "
+            "Say A talk too much, B skip the explanation, C make it feel like a test, or D be too serious."
+        ),
+        "options": ["A", "B", "C", "D"],
+        "answer_map": {
+            "a": "A", "talk": "A", "much": "A", "point": "A",
+            "b": "B", "skip": "B", "explanation": "B", "why": "B",
+            "c": "C", "test": "C", "relaxed": "C",
+            "d": "D", "serious": "D", "fun": "D",
         },
     },
 ]

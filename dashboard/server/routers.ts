@@ -4,10 +4,12 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { alarmsRouter } from "./alarmsRouter";
+import { flashcardsRouter } from "./flashcardsRouter";
 import { focusRouter } from "./focusRouter";
 import { notesRouter } from "./notesRouter";
 import { onboardingRouter } from "./onboardingRouter";
 import { profileRouter } from "./profileRouter";
+import { quizzesRouter } from "./quizzesRouter";
 import { extractAssignmentsFromSyllabus } from "./syllabus";
 import { tasksRouter } from "./tasksRouter";
 
@@ -27,6 +29,8 @@ export const appRouter = router({
   onboarding: onboardingRouter,
   alarms: alarmsRouter,
   notes: notesRouter,
+  quizzes: quizzesRouter,
+  flashcards: flashcardsRouter,
   syllabus: router({
     extract: publicProcedure
       .input(z.object({

@@ -20,7 +20,7 @@ export function NotesWidget() {
   const [color,   setColor]   = useState("yellow");
   const [open,    setOpen]    = useState(false);
 
-  const { data: notes, refetch } = trpc.notes.list.useQuery();
+  const { data: notes, refetch } = trpc.notes.list.useQuery(undefined, { refetchInterval: 3000 });
   const create = trpc.notes.create.useMutation({
     onSuccess: () => {
       refetch();

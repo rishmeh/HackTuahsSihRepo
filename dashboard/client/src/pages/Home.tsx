@@ -14,7 +14,9 @@ import type { ExtractedAssignment } from "../../../shared/syllabus";
 import { AlarmWidget } from "@/components/widgets/AlarmWidget";
 import { ChatHistoryWidget } from "@/components/widgets/ChatHistoryWidget";
 import { ClockWidget } from "@/components/widgets/ClockWidget";
+import { FlashcardsWidget } from "@/components/widgets/FlashcardsWidget";
 import { NotesWidget } from "@/components/widgets/NotesWidget";
+import { QuizzesWidget } from "@/components/widgets/QuizzesWidget";
 import { TimerWidget } from "@/components/widgets/TimerWidget";
 import { VoiceButton } from "@/components/widgets/VoiceButton";
 import { WeatherWidget } from "@/components/widgets/WeatherWidget";
@@ -235,6 +237,8 @@ function WidgetDock({ profileId }: { profileId: number }) {
         <NotesWidget />
         <ChatHistoryWidget sessionId={sessionId} />
         <WebcamWidget />
+        <QuizzesWidget profileId={profileId} />
+        <FlashcardsWidget profileId={profileId} />
       </div>
     </div>
   );
@@ -263,8 +267,8 @@ export default function Home({ profile, onLoggedOut }: { profile: ProfileSummary
   const [syllabusOpen, setSyllabusOpen] = useState(() => new URLSearchParams(window.location.search).get("upload") === "syllabus");
   const utils = trpc.useUtils();
 
-  const tasksQuery = trpc.tasks.list.useQuery();
-  const kpisQuery = trpc.focus.kpis.useQuery();
+  const tasksQuery = trpc.tasks.list.useQuery(undefined, { refetchInterval: 3000 });
+  const kpisQuery = trpc.focus.kpis.useQuery(undefined, { refetchInterval: 3000 });
   const tasks: Task[] = useMemo(
     () => (tasksQuery.data ?? []).map((t) => ({ ...t, done: Boolean(t.done) })),
     [tasksQuery.data]

@@ -44,6 +44,56 @@ async function startServer() {
       createContext,
     })
   );
+
+  // ── Plain REST routes (used by ML voice agent) ────────────────────────────
+  // These bypass tRPC auth to allow the local Python process to persist data.
+  app.get("/api/quizzes", async (req, res) => {
+    try {
+      const { getDb } = await import("../db.js");
+      const { quizzes } = await import("../../drizzle/schema.js");
+      const { eq, desc } = await import("drizzle-orm");
+      const db = await getDb();
+      const profileId = parseInt(String(req.query.profileId ?? "0"), 10);
+      const rows = await db.select().from(quizzes).where(eq(quizzes.ownerProfileId, profileId)).orderBy(desc(quizzes.createdAt));
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: String(err) }); }
+  });
+
+  app.post("/api/quizzes", async (req, res) => {
+    try {
+      const { getDb } = await import("../db.js");
+      const { quizzes } = await import("../../drizzle/schema.js");
+      const db = await getDb();
+      const { ownerProfileId = 0, topic, questions = "[]", totalQuestions = 0 } = req.body as Record<string, unknown>;
+      const [row] = await db.insert(quizzes).values({ ownerProfileId: Number(ownerProfileId), topic: String(topic), questions: String(questions), totalQuestions: Number(totalQuestions) }).returning();
+      res.json(row);
+    } catch (err) { res.status(500).json({ error: String(err) }); }
+  });
+
+  app.get("/api/flashcards", async (req, res) => {
+    try {
+      const { getDb } = await import("../db.js");
+      const { flashcardDecks } = await import("../../drizzle/schema.js");
+      const { eq, desc } = await import("drizzle-orm");
+      const db = await getDb();
+      const profileId = parseInt(String(req.query.profileId ?? "0"), 10);
+      const rows = await db.select().from(flashcardDecks).where(eq(flashcardDecks.ownerProfileId, profileId)).orderBy(desc(flashcardDecks.createdAt));
+      res.json(rows);
+    } catch (err) { res.status(500).json({ error: String(err) }); }
+  });
+
+  app.post("/api/flashcards", async (req, res) => {
+    try {
+      const { getDb } = await import("../db.js");
+      const { flashcardDecks } = await import("../../drizzle/schema.js");
+      const db = await getDb();
+      const { ownerProfileId = 0, topic, cards = "[]", totalCards = 0 } = req.body as Record<string, unknown>;
+      const [row] = await db.insert(flashcardDecks).values({ ownerProfileId: Number(ownerProfileId), topic: String(topic), cards: String(cards), totalCards: Number(totalCards) }).returning();
+      res.json(row);
+    } catch (err) { res.status(500).json({ error: String(err) }); }
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);

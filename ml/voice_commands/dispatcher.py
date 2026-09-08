@@ -22,13 +22,23 @@ def dispatch(intent: Intent, profile_id: int = 0) -> Optional[str]:
     if n == "get_weather":
         loc = intent.params.get("location") or "your city"
         try:
-            r = requests.get(f"{ML_BASE}/weather", params={"location": loc}, timeout=10)
+            r = requests.get(f"{ML_BASE}/weather", params={"location": loc}, timeout=20)
             if r.ok:
                 d = r.json()
                 desc = d.get("weather", [{}])[0].get("description", "")
                 temp = d.get("main", {}).get("temp", "?")
                 hum  = d.get("main", {}).get("humidity", "?")
                 return f"In {loc.title()}, it's {temp} degrees Celsius with {desc}. Humidity is {hum} percent."
+            elif r.status_code == 503:
+                return ("Weather isn't available right now because no OpenWeatherMap API key "
+                        "is configured. Add OPENWEATHERMAP_API_KEY to ml/.env to enable it.")
+            elif r.status_code == 404:
+                return f"I couldn't find weather data for {loc}. Try a different city name."
+            else:
+                logger.warning("Weather endpoint returned %d: %s", r.status_code, r.text[:200])
+        except requests.exceptions.Timeout:
+            logger.warning("Weather request timed out for location: %s", loc)
+            return "The weather service is taking too long to respond. Please try again shortly."
         except Exception as e:
             logger.warning("Weather fetch failed: %s", e)
         return "Sorry, I couldn't fetch the weather right now."
@@ -170,5 +180,116 @@ def dispatch(intent: Intent, profile_id: int = 0) -> Optional[str]:
         except Exception as e:
             logger.warning("List tasks failed: %s", e)
         return "Sorry, I couldn't fetch your tasks."
+
+    # ── Quiz creation ──────────────────────────────────────────────────────────
+    if n == "create_quiz":
+        topic = intent.params.get("topic", "").strip()
+        if not topic:
+            return "What topic should the quiz be about?"
+        try:
+            import asyncio as _asyncio
+            from quiz.generator import generate_and_format_quiz
+            from quiz.models import QuizRequest, QuizStudentProfile
+            import json
+
+            req = QuizRequest(
+                subject=topic,
+                num_questions=5,
+                student=QuizStudentProfile(age=10, covered_topics=[topic]),
+            )
+            quiz_obj, _ = _asyncio.run(generate_and_format_quiz(req))
+            questions_json = json.dumps([q.model_dump() for q in quiz_obj.questions])
+
+            # Save to dashboard DB via REST
+            DASHBOARD_URL = "http://localhost:3000"
+            save_r = requests.post(
+                f"{DASHBOARD_URL}/api/quizzes",
+                json={
+                    "ownerProfileId": profile_id,
+                    "topic": topic,
+                    "questions": questions_json,
+                    "totalQuestions": quiz_obj.num_questions,
+                },
+                timeout=10,
+            )
+            if save_r.ok:
+                return (
+                    f"Done! I've created a {quiz_obj.num_questions}-question quiz on {topic} "
+                    "and saved it to your dashboard. Say 'take a quiz on "
+                    + topic + "' to start it!"
+                )
+            return f"I generated a quiz on {topic} but couldn't save it to your dashboard right now."
+        except Exception as e:
+            logger.warning("Quiz creation failed: %s", e)
+        return "Sorry, I couldn't create a quiz right now. Please try again."
+
+    # ── Flashcard creation ─────────────────────────────────────────────────────
+    if n == "create_flashcards":
+        topic = intent.params.get("topic", "").strip()
+        if not topic:
+            return "What topic should the flashcards cover?"
+        try:
+            import asyncio as _asyncio
+            from flashcards.generator import generate_and_format_deck
+            from flashcards.models import FlashcardRequest, FlashcardStudentProfile
+            import json
+
+            req = FlashcardRequest(
+                subject=topic,
+                num_cards=8,
+                student=FlashcardStudentProfile(age=10, covered_topics=[topic]),
+            )
+            deck_obj, _ = _asyncio.run(generate_and_format_deck(req))
+            cards_json = json.dumps([c.model_dump() for c in deck_obj.cards])
+
+            DASHBOARD_URL = "http://localhost:3000"
+            save_r = requests.post(
+                f"{DASHBOARD_URL}/api/flashcards",
+                json={
+                    "ownerProfileId": profile_id,
+                    "topic": topic,
+                    "cards": cards_json,
+                    "totalCards": deck_obj.num_cards,
+                },
+                timeout=10,
+            )
+            if save_r.ok:
+                return (
+                    f"Done! I've made {deck_obj.num_cards} flashcards on {topic} "
+                    "and saved them to your dashboard. Open the Flashcards widget to study!"
+                )
+            return f"I generated flashcards on {topic} but couldn't save them to your dashboard."
+        except Exception as e:
+            logger.warning("Flashcard creation failed: %s", e)
+        return "Sorry, I couldn't create flashcards right now. Please try again."
+
+    # ── Take quiz (interactive voice quiz session) ─────────────────────────────
+    if n == "take_quiz":
+        topic = intent.params.get("topic", "").strip()
+        if not topic:
+            return "What topic would you like to be quizzed on?"
+        try:
+            import asyncio as _asyncio
+            from quiz.generator import generate_and_format_quiz
+            from quiz.models import QuizRequest, QuizStudentProfile
+            from quiz_sessions import sessions as _quiz_sessions
+
+            req = QuizRequest(
+                subject=topic,
+                num_questions=3,
+                student=QuizStudentProfile(age=10, covered_topics=[topic]),
+            )
+            quiz_obj, _ = _asyncio.run(generate_and_format_quiz(req))
+            questions = [q.model_dump() for q in quiz_obj.questions]
+            return _quiz_sessions.start(str(profile_id), topic, questions)
+        except Exception as e:
+            logger.warning("Take quiz failed: %s", e)
+        return "Sorry, I couldn't start a quiz right now."
+
+    # ── Cancel quiz ────────────────────────────────────────────────────────────
+    if n == "cancel_quiz":
+        from quiz_sessions import sessions as _quiz_sessions
+        _quiz_sessions.cancel(str(profile_id))
+        return "Quiz cancelled. No worries — come back when you're ready!"
 
     return None  # unknown — fall through to LLM

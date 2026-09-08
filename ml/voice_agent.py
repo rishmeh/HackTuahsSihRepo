@@ -39,15 +39,31 @@ except ImportError as e:
     print(f"Missing dependency: {e}")
     sys.exit(1)
 
-from learner.policy import default_settings
+from learner.policy import default_settings, derive_settings
+from learner.profile_store import ProfileStore
+from learner import config as learner_config
 from persona.phrases import PhraseBook, Situation
 from persona.voice import voice_params
 from voice_commands.intent import parse as parse_intent
 from voice_commands.dispatcher import dispatch as dispatch_intent
 from voice_commands.router import llm_route
 from persona_setup import sessions as persona_sessions
+from quiz_sessions import sessions as quiz_sessions
 
-_SETTINGS = default_settings(age=10)
+# Profile ID of the active user. Defaults to 1 (the first created student profile)
+# so local testing syncs properly with the dashboard.
+ACTIVE_PROFILE_ID: int = int(os.getenv("TABLETOT_PROFILE_ID", "1"))
+
+_store = ProfileStore(learner_config.LEARNER_DB_PATH)
+_stored_profile = _store.get(str(ACTIVE_PROFILE_ID))
+
+if _stored_profile:
+    _SETTINGS = derive_settings(_stored_profile.profile)
+    _STUDENT_AGE = _stored_profile.profile.age
+else:
+    _SETTINGS = default_settings(age=10)
+    _STUDENT_AGE = 10
+
 _PHRASES  = PhraseBook()
 _VOICE    = voice_params(_SETTINGS)
 
@@ -76,10 +92,6 @@ def _synthesis_config():
 
 
 _SYN_CONFIG = _synthesis_config()
-
-# Profile ID of the active user (0 = guest/unknown). Face recognition can
-# replace this later; for laptop testing set TABLETOT_PROFILE_ID before launch.
-ACTIVE_PROFILE_ID: int = int(os.getenv("TABLETOT_PROFILE_ID", "0"))
 
 PIPER_MODEL_NAME = "en_US-lessac-medium.onnx"
 PIPER_MODEL_URL  = (
@@ -191,10 +203,19 @@ def main():
                                 profile_key = str(ACTIVE_PROFILE_ID)
                                 intent = parse_intent(transcription)
 
+                                # Quiz session owns the next utterance while active.
+                                if quiz_sessions.is_active(profile_key):
+                                    if intent.name == "cancel_quiz":
+                                        quiz_sessions.cancel(profile_key)
+                                        speak_text("Quiz cancelled. Come back anytime!")
+                                    else:
+                                        reply, done = quiz_sessions.answer(profile_key, transcription)
+                                        speak_text(reply)
+
                                 # Persona setup owns the next utterance until it completes
                                 # or the user explicitly cancels it. This prevents answers
                                 # being misrouted into the normal command/chat path.
-                                if persona_sessions.is_active(profile_key):
+                                elif persona_sessions.is_active(profile_key):
                                     if intent.name == "cancel_persona_setup":
                                         persona_sessions.cancel(profile_key)
                                         speak_text("Okay, I cancelled persona setup. Your existing persona is unchanged.")
@@ -232,8 +253,8 @@ def main():
                                             payload = {
                                                 "query": transcription,
                                                 "student": {
-                                                    "name": "Voice User", "age": 10,
-                                                    "grade": "5th grade",
+                                                    "name": "Voice User", "age": _STUDENT_AGE,
+                                                    "grade": f"{_STUDENT_AGE - 5}th grade" if _STUDENT_AGE > 5 else "unknown",
                                                     "personality_traits": ["curious"],
                                                     "interests": [], "language_level": "intermediate",
                                                 },
@@ -257,9 +278,16 @@ def main():
                     else:
                         print("Audio too short, ignoring.")
 
-                    ready_msg = "Speak again." if _ARGS.mode == "continuous" else "Say 'Hey Jarvis'."
+                    in_session = quiz_sessions.is_active(str(ACTIVE_PROFILE_ID)) or persona_sessions.is_active(str(ACTIVE_PROFILE_ID))
+                    is_continuous = _ARGS.mode == "continuous" or in_session
+                    
+                    ready_msg = "Speak again." if is_continuous else "Say 'Hey Jarvis'."
                     print(f"\nReady. {ready_msg}")
-                    state = "RECORDING" if _ARGS.mode == "continuous" else "WAKEWORD"
+                    state = "RECORDING" if is_continuous else "WAKEWORD"
+                    
+                    recorded_frames = []
+                    silence_frames = 0
+                    
                     oww_model.reset()
                     while not audio_queue.empty():
                         audio_queue.get()

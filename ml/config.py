@@ -32,21 +32,10 @@ OLLAMA_THINK_TIMEOUT: float = float(os.getenv("OLLAMA_THINK_TIMEOUT", "120"))
 # ---------------------------------------------------------------------------
 # Controls what happens when the SLM has low confidence or requests escalation.
 #   "model_thinking" — retry the local SLM with think=True (default, no API key needed)
-#   "openrouter"     — forward to OpenRouter (requires OPENROUTER_API_KEY)
-ESCALATION_MODE: str = os.getenv("ESCALATION_MODE", "model_thinking")
-
 # SLM confidence score below this triggers escalation (0.0 – 1.0)
 ESCALATION_CONFIDENCE_THRESHOLD: float = float(
     os.getenv("ESCALATION_CONFIDENCE_THRESHOLD", "0.6")
 )
-
-# ---------------------------------------------------------------------------
-# External LLM API (OpenRouter) — used only when ESCALATION_MODE="openrouter"
-# ---------------------------------------------------------------------------
-OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_BASE_URL: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct")
-OPENROUTER_TIMEOUT: float = float(os.getenv("OPENROUTER_TIMEOUT", "30"))
 
 # ---------------------------------------------------------------------------
 # Safety / moderation

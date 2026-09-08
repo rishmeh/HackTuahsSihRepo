@@ -4,7 +4,7 @@ quiz/generator.py — Orchestrates the full quiz generation workflow.
   QuizRequest
       │
       ▼
-  [openrouter_quiz_client] ← calls OpenRouter API
+  [ollama_quiz_client] ← calls local Ollama model
       │
       ▼
   [template.parse_quiz_from_json] ← validates & builds Quiz model
@@ -16,9 +16,10 @@ quiz/generator.py — Orchestrates the full quiz generation workflow.
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 from quiz.models import Quiz, QuizRequest
-from quiz.openrouter_quiz_client import generate_quiz_via_openrouter
+from quiz.ollama_quiz_client import generate_quiz_via_ollama
 from quiz.template import format_quiz, parse_quiz_from_json
 
 logger = logging.getLogger(__name__)
@@ -38,10 +39,10 @@ async def generate_quiz(req: QuizRequest) -> Quiz:
         req.student.covered_topics,
     )
 
-    raw = await generate_quiz_via_openrouter(req)
+    raw = await generate_quiz_via_ollama(req)
     if raw is None:
         raise RuntimeError(
-            "Quiz generation failed — check if OpenRouter API key is valid and network is up."
+            "Quiz generation failed — ensure Ollama is running and the model is loaded."
         )
 
     quiz = parse_quiz_from_json(
@@ -53,8 +54,8 @@ async def generate_quiz(req: QuizRequest) -> Quiz:
 
     if quiz is None:
         raise RuntimeError(
-            "OpenRouter returned a quiz that could not be parsed or validated. "
-            "Check the OpenRouter API output format."
+            "Ollama returned a quiz that could not be parsed or validated. "
+            "Check the JSON output format."
         )
 
     logger.info("Quiz generated successfully: %s (%d questions)", quiz.quiz_id, quiz.num_questions)

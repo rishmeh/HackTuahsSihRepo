@@ -1,10 +1,7 @@
 """
-quiz/openrouter_quiz_client.py — Calls the OpenRouter API to generate high-quality quizzes.
+quiz/ollama_quiz_client.py — Calls the local Ollama SLM to generate high-quality quizzes.
 
-This replaces the SLM for quiz generation to ensure high-quality, accurate,
-and grade-aligned content. OpenRouter first considers standard curriculum details
-for the given grade and subject, pairs it with the student's covered topics,
-and generates the quiz.
+OpenRouter was removed; we now strictly use the local Ollama model to generate quiz JSON.
 """
 
 from __future__ import annotations
@@ -21,7 +18,7 @@ from quiz.models import QuizRequest
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# System prompt for quiz generation via OpenRouter
+# System prompt for quiz generation via Ollama
 # ---------------------------------------------------------------------------
 
 _QUIZ_SYSTEM_PROMPT = textwrap.dedent("""\
@@ -89,52 +86,46 @@ def _build_quiz_prompt(req: QuizRequest) -> str:
     )
 
 
-async def generate_quiz_via_openrouter(req: QuizRequest) -> Optional[str]:
+async def generate_quiz_via_ollama(req: QuizRequest) -> Optional[str]:
     """
-    Ask the OpenRouter API to generate a high-quality quiz JSON string.
+    Ask the local Ollama SLM to generate a high-quality quiz JSON string.
     
-    Returns the raw string from OpenRouter (to be parsed by template.py),
+    Returns the raw string from Ollama (to be parsed by generator.py),
     or None on failure.
     """
-    if not config.OPENROUTER_API_KEY:
-        logger.error("OPENROUTER_API_KEY is not set. Cannot use OpenRouter for quiz generation.")
-        return None
-
     payload = {
-        "model": config.OPENROUTER_MODEL,
+        "model": config.OLLAMA_MODEL,
         "messages": [
             {"role": "system", "content": _QUIZ_SYSTEM_PROMPT},
             {"role": "user", "content": _build_quiz_prompt(req)},
         ],
-        "max_tokens": 2000,
-        "temperature": 0.5,
-    }
-
-    headers = {
-        "Authorization": f"Bearer {config.OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
+        "options": {
+            "temperature": 0.5,
+            "num_predict": 2000,
+        },
+        "stream": False,
+        "format": "json"
     }
 
     try:
-        async with httpx.AsyncClient(timeout=config.OPENROUTER_TIMEOUT * 2) as client:
+        async with httpx.AsyncClient(timeout=config.OLLAMA_TIMEOUT * 2) as client:
             response = await client.post(
-                f"{config.OPENROUTER_BASE_URL}/chat/completions",
+                f"{config.OLLAMA_BASE_URL}/api/chat",
                 json=payload,
-                headers=headers,
             )
             response.raise_for_status()
             data = response.json()
-            raw: str = data["choices"][0]["message"]["content"]
-            logger.debug("OpenRouter quiz raw output (first 500): %r", raw[:500])
+            raw: str = data["message"]["content"]
+            logger.debug("Ollama quiz raw output (first 500): %r", raw[:500])
             return raw
 
     except httpx.ConnectError:
-        logger.error("Cannot connect to OpenRouter API at %s for quiz generation.", config.OPENROUTER_BASE_URL)
+        logger.error("Cannot connect to Ollama API at %s for quiz generation.", config.OLLAMA_BASE_URL)
     except httpx.TimeoutException:
-        logger.error("OpenRouter quiz request timed out.")
+        logger.error("Ollama quiz request timed out.")
     except httpx.HTTPStatusError as exc:
-        logger.error("OpenRouter HTTP error during quiz: %s %s", exc.response.status_code, exc.response.text)
+        logger.error("Ollama HTTP error during quiz: %s %s", exc.response.status_code, exc.response.text)
     except Exception as exc:
-        logger.exception("Unexpected error in quiz OpenRouter call: %s", exc)
+        logger.exception("Unexpected error in quiz Ollama call: %s", exc)
 
     return None

@@ -67,7 +67,7 @@ class QuizStudentProfile(BaseModel):
 class QuizRequest(BaseModel):
     student: QuizStudentProfile
     subject: str = Field(..., min_length=2, max_length=100)
-    num_questions: int = Field(default=7, ge=5, le=10)
+    num_questions: int = Field(default=7, ge=2, le=15)
 
     @field_validator("subject")
     @classmethod

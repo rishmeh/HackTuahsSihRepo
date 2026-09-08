@@ -133,7 +133,7 @@ _LIST_NOTES = re.compile(
     r"|what\s+notes?\s+(?:do\s+i\s+have|are\s+there)", re.I)
 
 _LIST_TASKS = re.compile(
-    r"(?:what|show|list|tell\s+me|check|do\s+i\s+have)\s+(?:my\s+)?(?:tasks?|to-?dos?|to-?do\s+list)"
+    r"(?:what|show|list|tell|read|check|do\s+i\s+have)\s+(?:me\s+)?(?:my\s+)?(?:tasks?|to-?dos?|to-?do\s+list)"
     r"|list\s+(?:all\s+)?(?:my\s+)?(?:tasks?|to-?dos?)"
     r"|what(?:'s| is)\s+on\s+my\s+(?:to-?do|task)(?:\s+list)?"
     r"|(?:tasks?|to-?dos?)\s+(?:do\s+i\s+have|are\s+(?:there|pending))", re.I)
@@ -156,6 +156,32 @@ _PERSONA_SETUP = re.compile(
 
 _PERSONA_CANCEL = re.compile(
     r"(?:cancel|stop|quit|exit)\s+(?:the\s+)?(?:persona|personality)\s+(?:set\s*up|setup)",
+    re.I,
+)
+
+# ── Quiz / Flashcard intents ──────────────────────────────────────────────────
+
+_CREATE_QUIZ = re.compile(
+    r"(?:create|make|generate|give\s+me|start)\s+(?:a\s+)?quiz\s+(?:on|about|for|covering)?\s+(.+)"
+    r"|quiz\s+(?:me\s+)?(?:on|about)\s+(.+)",
+    re.I,
+)
+
+_CREATE_FLASHCARDS = re.compile(
+    r"(?:create|make|generate|give\s+me)\s+(?:some\s+)?(?:flash\s*cards?|study\s+cards?)\s+(?:on|about|for|covering)?\s*(.+)"
+    r"|(?:flash\s*cards?|study\s+cards?)\s+(?:on|about|for)\s+(.+)"
+    r"|(?:make|create|generate)\s+(.+)\s+flash\s*cards?",
+    re.I,
+)
+
+_TAKE_QUIZ = re.compile(
+    r"(?:take|do|start|begin|play)\s+(?:a\s+)?quiz\s+(?:on|about|for)?\s*(.+)"
+    r"|(?:test|quiz)\s+me\s+(?:on|about)?\s*(.+)",
+    re.I,
+)
+
+_CANCEL_QUIZ = re.compile(
+    r"(?:cancel|stop|quit|exit|end)\s+(?:the\s+)?quiz",
     re.I,
 )
 
@@ -198,6 +224,27 @@ def parse(text: str) -> Intent:
     # ── Persona setup (must not fall through to general chat) ────────────────
     if _PERSONA_CANCEL.search(text): return Intent("cancel_persona_setup")
     if _PERSONA_SETUP.search(text): return Intent("start_persona_setup")
+
+    # ── Quiz / Flashcard (check before generic create patterns) ───────────────
+    if _CANCEL_QUIZ.search(text): return Intent("cancel_quiz")
+
+    m = _TAKE_QUIZ.search(text)
+    if m:
+        topic = _first_group(m).strip().rstrip("?. ")
+        if topic:
+            return Intent("take_quiz", {"topic": topic})
+
+    m = _CREATE_QUIZ.search(text)
+    if m:
+        topic = _first_group(m).strip().rstrip("?. ")
+        if topic:
+            return Intent("create_quiz", {"topic": topic})
+
+    m = _CREATE_FLASHCARDS.search(text)
+    if m:
+        topic = _first_group(m).strip().rstrip("?. ")
+        if topic:
+            return Intent("create_flashcards", {"topic": topic})
 
     # ── List queries (check before create to avoid false matches) ─────────────
     if _LIST_TIMERS.search(text): return Intent("list_timers")

@@ -4,7 +4,7 @@ quiz/template.py — Quiz formatting and validation utilities.
 Responsibilities:
   - Parse raw JSON from the SLM into validated Quiz objects.
   - Format a Quiz into a clean, human-readable string.
-  - Enforce question-count bounds (5–10).
+  - Enforce question-count bounds (2–15).
 """
 
 from __future__ import annotations
@@ -52,10 +52,10 @@ def parse_quiz_from_json(raw: str, expected_count: int, student: QuizStudentProf
         logger.error("Unexpected quiz JSON structure: %s", type(data))
         return None
 
-    # Enforce count bounds
-    questions_raw = questions_raw[:10]  # never more than 10
-    if len(questions_raw) < 5:
-        logger.error("SLM returned fewer than 5 questions (%d).", len(questions_raw))
+    # Clamp to at most 15
+    questions_raw = questions_raw[:15]
+    if len(questions_raw) < 2:
+        logger.error("SLM returned fewer than 2 questions (%d).", len(questions_raw))
         return None
 
     # Re-number question IDs to guarantee sequential ordering
@@ -68,9 +68,9 @@ def parse_quiz_from_json(raw: str, expected_count: int, student: QuizStudentProf
         except (ValidationError, TypeError) as exc:
             logger.warning("Skipping malformed question %d: %s", idx, exc)
 
-    if len(parsed_questions) < 5:
+    if len(parsed_questions) < 2:
         logger.error(
-            "After validation, fewer than 5 valid questions remain (%d).",
+            "After validation, fewer than 2 valid questions remain (%d).",
             len(parsed_questions),
         )
         return None

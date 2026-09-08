@@ -136,6 +136,23 @@ async function ensureSchema(db: ReturnType<typeof drizzle>) {
     data TEXT NOT NULL,
     fetchedAt INTEGER NOT NULL
   )`));
+  await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS quizzes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerProfileId INTEGER NOT NULL DEFAULT 0,
+    topic TEXT NOT NULL,
+    questions TEXT NOT NULL DEFAULT '[]',
+    score INTEGER,
+    totalQuestions INTEGER NOT NULL DEFAULT 0,
+    createdAt INTEGER NOT NULL
+  )`));
+  await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS flashcardDecks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ownerProfileId INTEGER NOT NULL DEFAULT 0,
+    topic TEXT NOT NULL,
+    cards TEXT NOT NULL DEFAULT '[]',
+    totalCards INTEGER NOT NULL DEFAULT 0,
+    createdAt INTEGER NOT NULL
+  )`));
 }
 
 export async function getDb() {
