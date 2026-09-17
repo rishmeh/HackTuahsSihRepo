@@ -140,6 +140,24 @@ class ServoController:
     def focus(self):
         self._gesture([(0.0, -5.0, 0.1)])
 
+    def track(self, pan: float, tilt: float) -> None:
+        """
+        Move directly to (pan, tilt) angles for continuous face tracking.
+
+        Unlike the named gestures this is NOT asynchronous and does NOT start
+        a gesture thread — it applies the angles immediately and returns.
+        This keeps the servo latency as low as possible during live tracking.
+
+        Args:
+            pan:  Horizontal angle in degrees.  Positive = right of centre.
+            tilt: Vertical angle in degrees.    Positive = above centre.
+        """
+        # Bump the gesture generation so any running gesture thread aborts
+        with self._lock:
+            self._gesture_generation += 1
+        self._set_head(pan)
+        self._set_body(tilt)
+
     def cleanup(self):
         with self._lock:
             self._closed = True

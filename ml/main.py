@@ -340,8 +340,11 @@ async def hardware_process_frame(
 ) -> dict:
     """
     Pi streams a camera frame here → laptop runs face detection + recognition.
-    Returns the identified student_id (or null) + face metadata.
+    Returns the identified student_id (or null) + face metadata + pan/tilt
+    servo angles so the Pi can point its head at the detected face.
     """
+    from vision.head_tracker import face_to_servo_angles, no_face_angles
+
     buffer = np.frombuffer(await image.read(), dtype=np.uint8)
     frame = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
     if frame is None:
@@ -365,6 +368,17 @@ async def hardware_process_frame(
             "score": result.face.score,
         })
 
+    # Compute pan/tilt angles from face position so the Pi can track the head.
+    # pan  > 0 → face is right of centre → servo turns right
+    # tilt > 0 → face is above centre   → servo tilts up
+    frame_h, frame_w = frame.shape[:2]
+    if result.face is not None:
+        pan_deg, tilt_deg = face_to_servo_angles(
+            result.face, frame_width=frame_w, frame_height=frame_h
+        )
+    else:
+        pan_deg, tilt_deg = no_face_angles()
+
     command = _robot_state.observe_face(
         student_id=result.student_id,
         face_count=result.face_count,
@@ -381,6 +395,8 @@ async def hardware_process_frame(
         "student_id": result.student_id,
         "score": round(result.score, 4),
         "faces": faces,
+        "pan_deg": pan_deg,
+        "tilt_deg": tilt_deg,
         "event": event,
         "command": command,
     }

@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 
 LAPTOP_URL = os.getenv("LAPTOP_URL", "http://192.168.0.164:8000")
 POLL_INTERVAL = 0.25
-FRAME_INTERVAL = 0.5
+# When TRACKING_MODE is enabled, frames are sent faster for snappier servo response.
+TRACKING_MODE = os.getenv("TRACKING_MODE", "true").lower() == "true"
+FRAME_INTERVAL = 0.15 if TRACKING_MODE else 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +67,7 @@ class _NullServos:
     def happy(self): pass
     def thinking(self): pass
     def focus(self): pass
+    def track(self, pan: float, tilt: float): pass  # no-op without GPIO
     def cleanup(self): pass
 
 
@@ -270,6 +273,19 @@ class PeripheralDaemon:
                 return
             result = response.json()
             self._student_id = result.get("student_id")
+
+            # --- Head tracking: apply pan/tilt immediately from frame response ---
+            # This is the fast path; it skips the 250 ms poll cycle.
+            if TRACKING_MODE:
+                pan = result.get("pan_deg")
+                tilt = result.get("tilt_deg")
+                if pan is not None and tilt is not None:
+                    try:
+                        self.servos.track(float(pan), float(tilt))
+                        logger.debug("Tracking: pan=%.1f tilt=%.1f", pan, tilt)
+                    except Exception as exc:
+                        logger.debug("Servo track error: %s", exc)
+
             self._apply_command(result.get("command") or {})
             if result.get("event") == "arrived":
                 logger.info("Student recognised: %s", self._student_id)
