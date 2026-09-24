@@ -29,6 +29,12 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Create the SQLite file and its tables now rather than on the first request.
+  // The Python ML server writes timers and alarms into this same file, so it
+  // must exist as soon as the dashboard is up, even before anyone opens it.
+  const { getDb } = await import("../db.js");
+  await getDb();
+
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
@@ -64,8 +70,8 @@ async function startServer() {
       const { getDb } = await import("../db.js");
       const { quizzes } = await import("../../drizzle/schema.js");
       const db = await getDb();
-      const { ownerProfileId = 0, topic, questions = "[]", totalQuestions = 0 } = req.body as Record<string, unknown>;
-      const [row] = await db.insert(quizzes).values({ ownerProfileId: Number(ownerProfileId), topic: String(topic), questions: String(questions), totalQuestions: Number(totalQuestions) }).returning();
+      const { ownerProfileId = 0, topic, questions = "[]", totalQuestions = 0, score } = req.body as Record<string, unknown>;
+      const [row] = await db.insert(quizzes).values({ ownerProfileId: Number(ownerProfileId), topic: String(topic), questions: String(questions), totalQuestions: Number(totalQuestions), score: score == null ? null : Number(score) }).returning();
       res.json(row);
     } catch (err) { res.status(500).json({ error: String(err) }); }
   });
