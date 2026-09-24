@@ -4,12 +4,15 @@ import { GraduationCap, UsersRound } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 type Role = "student" | "parent";
+type Mode = "signin" | "signup";
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [role, setRole] = useState<Role>("student");
+  const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
   const [linkedStudentName, setLinkedStudentName] = useState("");
+  const [linkedStudentPin, setLinkedStudentPin] = useState("");
   const [error, setError] = useState("");
 
   const login = trpc.profile.login.useMutation({
@@ -20,11 +23,14 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
+    const linking = role === "parent" && mode === "signup";
     login.mutate({
+      mode,
       role,
       name,
       pin,
-      linkedStudentName: role === "parent" ? linkedStudentName : undefined,
+      linkedStudentName: linking ? linkedStudentName : undefined,
+      linkedStudentPin: linking ? linkedStudentPin : undefined,
     });
   };
 
@@ -48,9 +54,9 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       <div className="login-form-panel">
         <form className="login-card" onSubmit={submit}>
           <div className="eyebrow eyebrow--coral">
-            <span className="sun-dot" /> Welcome back
+            <span className="sun-dot" /> {mode === "signin" ? "Welcome back" : "New here"}
           </div>
-          <h1 className="login-title">Sign in to your desk.</h1>
+          <h1 className="login-title">{mode === "signin" ? "Sign in to your desk." : "Create your account."}</h1>
 
           <div className="role-tabs" role="tablist" aria-label="Choose your role">
             <button
@@ -85,7 +91,7 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
           </label>
 
           <label className="login-field">
-            <span>PIN</span>
+            <span>{mode === "signup" ? "Choose a PIN" : "PIN"}</span>
             <input
               value={pin}
               onChange={(event) => setPin(event.target.value.replace(/[^0-9]/g, ""))}
@@ -98,29 +104,55 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
             />
           </label>
 
-          {role === "parent" && (
-            <label className="login-field">
-              <span>Your child's name</span>
-              <input
-                value={linkedStudentName}
-                onChange={(event) => setLinkedStudentName(event.target.value)}
-                placeholder="Only needed the first time you sign in"
-                maxLength={80}
-              />
-            </label>
+          {role === "parent" && mode === "signup" && (
+            <>
+              <label className="login-field">
+                <span>Your child's name</span>
+                <input
+                  value={linkedStudentName}
+                  onChange={(event) => setLinkedStudentName(event.target.value)}
+                  placeholder="As they sign in to TableTot"
+                  required
+                  maxLength={80}
+                />
+              </label>
+              <label className="login-field">
+                <span>Your child's PIN</span>
+                <input
+                  value={linkedStudentPin}
+                  onChange={(event) => setLinkedStudentPin(event.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="Ask them to type it in"
+                  inputMode="numeric"
+                  type="password"
+                  required
+                  minLength={4}
+                  maxLength={8}
+                />
+              </label>
+            </>
           )}
 
           {error && <div className="upload-status upload-status--error">{error}</div>}
 
           <button className="modal-primary login-submit" type="submit" disabled={login.isPending}>
-            {login.isPending ? "Signing in…" : "Continue"}
+            {login.isPending ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
           </button>
 
           <p className="login-hint">
-            {role === "student"
-              ? "First time here? Just pick a name and a PIN — that becomes your account."
-              : "First time here? Enter your child's name once to link your view to theirs."}
+            {mode === "signin"
+              ? "First time here? "
+              : "Already have an account? "}
+            <button
+              type="button"
+              className="login-mode-switch"
+              onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); }}
+            >
+              {mode === "signin" ? "Create an account" : "Sign in instead"}
+            </button>
           </p>
+          {mode === "signup" && role === "parent" && (
+            <p className="login-hint">Your child types their PIN once to link your view to theirs.</p>
+          )}
         </form>
       </div>
     </div>
