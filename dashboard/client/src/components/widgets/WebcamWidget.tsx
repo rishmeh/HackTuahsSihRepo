@@ -14,8 +14,6 @@ const ML = (import.meta.env.VITE_ML_BASE_URL as string | undefined) ?? "http://1
 
 const CAP_W = 640;
 const CAP_H = 480;
-const DISP_W = 320;
-const DISP_H = 240;
 
 interface FaceBox {
   x: number;
@@ -147,8 +145,9 @@ export function WebcamWidget() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoDetect, on]);
 
-  const sx = DISP_W / CAP_W;
-  const sy = DISP_H / CAP_H;
+  // Face boxes come back in capture pixels; place them as percentages so they
+  // stay aligned however wide the card is.
+  const pct = (v: number, of: number) => `${(v / of) * 100}%`;
 
   return (
     <div className="rounded-2xl bg-card border shadow-sm p-5 flex flex-col gap-3">
@@ -169,8 +168,8 @@ export function WebcamWidget() {
 
       {/* Video + bounding box overlay */}
       <div
-        className="relative bg-black rounded-xl overflow-hidden"
-        style={{ width: DISP_W, height: DISP_H }}
+        className="relative bg-black rounded-xl overflow-hidden w-full"
+        style={{ aspectRatio: `${CAP_W} / ${CAP_H}` }}
       >
         <video
           ref={videoRef}
@@ -178,8 +177,8 @@ export function WebcamWidget() {
           playsInline
           muted
           style={{
-            width: DISP_W,
-            height: DISP_H,
+            width: "100%",
+            height: "100%",
             objectFit: "cover",
             display: on ? "block" : "none",
           }}
@@ -190,10 +189,10 @@ export function WebcamWidget() {
             key={i}
             style={{
               position: "absolute",
-              left:   f.x      * sx,
-              top:    f.y      * sy,
-              width:  f.width  * sx,
-              height: f.height * sy,
+              left:   pct(f.x, CAP_W),
+              top:    pct(f.y, CAP_H),
+              width:  pct(f.width, CAP_W),
+              height: pct(f.height, CAP_H),
               border: "2px solid #22c55e",
               borderRadius: 2,
               pointerEvents: "none",
