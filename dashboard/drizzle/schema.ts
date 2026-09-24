@@ -143,6 +143,16 @@ export const flashcardDecks = sqliteTable("flashcardDecks", {
   createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
+/** Limits a parent sets for their linked student. Null means "no limit". */
+export const parentalControls = sqliteTable("parentalControls", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  studentProfileId: integer("studentProfileId").notNull().unique(),
+  dailyLimitMinutes: integer("dailyLimitMinutes"),
+  quietStart: text("quietStart"), // "HH:MM", local time
+  quietEnd: text("quietEnd"),     // "HH:MM"; may be earlier than quietStart (overnight)
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type ProfileRow = typeof profiles.$inferSelect;
@@ -155,3 +165,4 @@ export type NoteRow = typeof notes.$inferSelect;
 export type ChatHistoryRow = typeof chatHistory.$inferSelect;
 export type QuizRow = typeof quizzes.$inferSelect;
 export type FlashcardDeckRow = typeof flashcardDecks.$inferSelect;
+export type ParentalControlsRow = typeof parentalControls.$inferSelect;

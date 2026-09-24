@@ -4,6 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { alarmsRouter } from "./alarmsRouter";
+import { controlsRouter } from "./controlsRouter";
 import { flashcardsRouter } from "./flashcardsRouter";
 import { focusRouter } from "./focusRouter";
 import { notesRouter } from "./notesRouter";
@@ -30,6 +31,7 @@ export const appRouter = router({
   alarms: alarmsRouter,
   notes: notesRouter,
   quizzes: quizzesRouter,
+  controls: controlsRouter,
   flashcards: flashcardsRouter,
   syllabus: router({
     extract: publicProcedure

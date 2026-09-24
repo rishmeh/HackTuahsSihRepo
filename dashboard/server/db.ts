@@ -5,14 +5,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  InsertUser,
   activeFocus,
   focusSessions,
+  parentalControls,
   profiles,
+  quizzes,
   tasks,
-  users,
 } from "../drizzle/schema";
-import { ENV } from "./_core/env";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(moduleDir, "..", "data");
@@ -153,6 +152,14 @@ async function ensureSchema(db: ReturnType<typeof drizzle>) {
     totalCards INTEGER NOT NULL DEFAULT 0,
     createdAt INTEGER NOT NULL
   )`));
+  await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS parentalControls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    studentProfileId INTEGER NOT NULL UNIQUE,
+    dailyLimitMinutes INTEGER,
+    quietStart TEXT,
+    quietEnd TEXT,
+    updatedAt INTEGER NOT NULL
+  )`));
 }
 
 export async function getDb() {
@@ -165,37 +172,6 @@ export async function getDb() {
   return _db;
 }
 
-// --- Legacy Manus OAuth user helpers (unused locally; kept for sdk.ts) ---
-
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) throw new Error("User openId is required for upsert");
-  const db = await getDb();
-  const values: InsertUser = { openId: user.openId };
-  const updateSet: Record<string, unknown> = {};
-  const textFields = ["name", "email", "loginMethod"] as const;
-  textFields.forEach((field) => {
-    if (user[field] !== undefined) {
-      values[field] = user[field] ?? null;
-      updateSet[field] = user[field] ?? null;
-    }
-  });
-  if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
-  if (user.role !== undefined) { values.role = user.role; updateSet.role = user.role; }
-  else if (user.openId === ENV.ownerOpenId) { values.role = "admin"; updateSet.role = "admin"; }
-  values.lastSignedIn ??= new Date();
-  if (!Object.keys(updateSet).length) updateSet.lastSignedIn = new Date();
-  await db
-    .insert(users)
-    .values(values)
-    .onConflictDoUpdate({ target: users.openId, set: updateSet });
-}
-
-export async function getUserByOpenId(openId: string) {
-  const db = await getDb();
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result[0];
-}
-
 // --- Profiles (student / parent accounts) ---
 
 export async function findProfileByRoleAndName(role: "student" | "parent", name: string) {
@@ -203,7 +179,8 @@ export async function findProfileByRoleAndName(role: "student" | "parent", name:
   const rows = await db
     .select()
     .from(profiles)
-    .where(and(eq(profiles.role, role), eq(profiles.name, name)))
+    // Names match case-insensitively, so "Oshi" and "oshi" are the same account.
+    .where(and(eq(profiles.role, role), sql`lower(${profiles.name}) = lower(${name.trim()})`))
     .limit(1);
   return rows[0];
 }
@@ -426,6 +403,168 @@ export async function computeKpisForStudent(studentProfileId: number) {
     focusMinutesTotal,
     sessionsCompleted,
     currentStreakDays: streak,
+  };
+}
+
+/** Local calendar day as YYYY-MM-DD, so a session at 11pm counts for that day. */
+function localDayKey(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Everything the parent view charts: last 7 days of focus, scored quizzes,
+ * and the most recent sessions and finished tasks. */
+export async function computeProgressForStudent(studentProfileId: number) {
+  const db = await getDb();
+  const [allTasks, completedSessions, quizRows] = await Promise.all([
+    listTasksForStudent(studentProfileId),
+    listCompletedFocusSessions(studentProfileId),
+    db.select().from(quizzes).where(eq(quizzes.ownerProfileId, studentProfileId)).orderBy(asc(quizzes.createdAt)),
+  ]);
+
+  const today = new Date();
+  const focusByDay = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (6 - i));
+    return { date: localDayKey(d), label: i === 6 ? "Today" : WEEKDAY[d.getDay()], minutes: 0 };
+  });
+  const dayIndex = new Map(focusByDay.map((day, i) => [day.date, i]));
+  for (const s of completedSessions) {
+    const i = dayIndex.get(localDayKey(s.endedAt ?? s.startedAt));
+    if (i !== undefined) focusByDay[i].minutes += s.durationSeconds / 60;
+  }
+  focusByDay.forEach((day) => { day.minutes = Math.round(day.minutes); });
+
+  const scoredQuizzes = quizRows
+    .filter((q) => q.score !== null && q.totalQuestions > 0)
+    .map((q) => ({
+      id: q.id,
+      topic: q.topic,
+      score: q.score as number,
+      total: q.totalQuestions,
+      percent: Math.round(((q.score as number) / q.totalQuestions) * 100),
+      createdAt: q.createdAt,
+    }));
+  const quizAveragePercent = scoredQuizzes.length
+    ? Math.round(scoredQuizzes.reduce((sum, q) => sum + q.percent, 0) / scoredQuizzes.length)
+    : null;
+
+  const taskTitle = new Map(allTasks.map((t) => [t.id, t.title]));
+  const recentSessions = completedSessions
+    .slice(-6)
+    .reverse()
+    .map((s) => ({
+      id: s.id,
+      taskTitle: s.taskId ? taskTitle.get(s.taskId) ?? "Deleted task" : "Free focus",
+      minutes: Math.round(s.durationSeconds / 60),
+      endedAt: s.endedAt ?? s.startedAt,
+    }));
+
+  const recentlyCompletedTasks = allTasks
+    .filter((t) => t.done)
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, 5)
+    .map((t) => ({ id: t.id, title: t.title, subject: t.subject, completedAt: t.updatedAt }));
+
+  return {
+    focusByDay,
+    focusMinutesThisWeek: focusByDay.reduce((sum, d) => sum + d.minutes, 0),
+    scoredQuizzes: scoredQuizzes.slice(-8),
+    quizAveragePercent,
+    quizzesTaken: scoredQuizzes.length,
+    recentSessions,
+    recentlyCompletedTasks,
+  };
+}
+
+// --- Parental controls ---
+
+export type ControlsInput = { dailyLimitMinutes: number | null; quietStart: string | null; quietEnd: string | null };
+
+export async function getControlsForStudent(studentProfileId: number) {
+  const db = await getDb();
+  const rows = await db.select().from(parentalControls).where(eq(parentalControls.studentProfileId, studentProfileId)).limit(1);
+  const row = rows[0];
+  return {
+    dailyLimitMinutes: row?.dailyLimitMinutes ?? null,
+    quietStart: row?.quietStart ?? null,
+    quietEnd: row?.quietEnd ?? null,
+    updatedAt: row?.updatedAt ?? null,
+  };
+}
+
+export async function saveControlsForStudent(studentProfileId: number, input: ControlsInput) {
+  const db = await getDb();
+  const now = new Date();
+  await db
+    .insert(parentalControls)
+    .values({ studentProfileId, ...input, updatedAt: now })
+    .onConflictDoUpdate({ target: parentalControls.studentProfileId, set: { ...input, updatedAt: now } });
+  return getControlsForStudent(studentProfileId);
+}
+
+const toMinutes = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+};
+
+/** True when `now` falls inside quiet hours, including windows that cross midnight. */
+export function isQuietTime(quietStart: string | null, quietEnd: string | null, now = new Date()) {
+  if (!quietStart || !quietEnd || quietStart === quietEnd) return false;
+  const current = now.getHours() * 60 + now.getMinutes();
+  const start = toMinutes(quietStart);
+  const end = toMinutes(quietEnd);
+  return start < end ? current >= start && current < end : current >= start || current < end;
+}
+
+export async function focusMinutesToday(studentProfileId: number, now = new Date()) {
+  const sessions = await listCompletedFocusSessions(studentProfileId);
+  const today = localDayKey(now);
+  return Math.round(
+    sessions
+      .filter((s) => localDayKey(s.endedAt ?? s.startedAt) === today)
+      .reduce((sum, s) => sum + s.durationSeconds, 0) / 60
+  );
+}
+
+/** The controls plus where the student stands against them right now. */
+export async function controlsStatusForStudent(studentProfileId: number, now = new Date()) {
+  const [controls, minutesToday] = await Promise.all([
+    getControlsForStudent(studentProfileId),
+    focusMinutesToday(studentProfileId, now),
+  ]);
+  const quietNow = isQuietTime(controls.quietStart, controls.quietEnd, now);
+  const limitReached = controls.dailyLimitMinutes !== null && minutesToday >= controls.dailyLimitMinutes;
+  return { ...controls, minutesToday, quietNow, limitReached };
+}
+
+// --- Live status for the parent view ---
+
+/** A focus block is 25 minutes; anything started longer ago than this and never
+ * finished was abandoned (tab closed, timer reset), so it no longer counts as live. */
+const LIVE_FOCUS_WINDOW_MS = 30 * 60 * 1000;
+
+export async function liveStatusForStudent(studentProfileId: number, now = new Date()) {
+  const [active, sessions, allTasks] = await Promise.all([
+    getActiveFocusForStudent(studentProfileId),
+    listCompletedFocusSessions(studentProfileId),
+    listTasksForStudent(studentProfileId),
+  ]);
+  const startedAt = active?.startedAt ?? null;
+  const focusing = !!startedAt && now.getTime() - startedAt.getTime() < LIVE_FOCUS_WINDOW_MS;
+
+  const lastActivity = [
+    ...sessions.map((s) => s.endedAt ?? s.startedAt),
+    ...allTasks.filter((t) => t.done).map((t) => t.updatedAt),
+    ...(startedAt ? [startedAt] : []),
+  ].reduce<Date | null>((latest, d) => (!latest || d > latest ? d : latest), null);
+
+  return {
+    state: focusing ? ("focusing" as const) : ("idle" as const),
+    taskTitle: focusing ? active?.task?.title ?? "Free focus" : null,
+    minutesIn: focusing && startedAt ? Math.floor((now.getTime() - startedAt.getTime()) / 60000) : null,
+    lastActivityAt: lastActivity,
   };
 }
 
