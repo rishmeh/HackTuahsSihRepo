@@ -3,7 +3,6 @@ import { parse as parseCookieHeader } from "cookie";
 import type { User, ProfileRow } from "../../drizzle/schema";
 import { getProfileById } from "../db";
 import { PROFILE_COOKIE_NAME, verifyProfileSession } from "../profileAuth";
-import { sdk } from "./sdk";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -15,14 +14,9 @@ export type TrpcContext = {
 export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
-  let user: User | null = null;
-
-  try {
-    user = await sdk.authenticateRequest(opts.req);
-  } catch (error) {
-    // Authentication is optional for public procedures.
-    user = null;
-  }
+  // The Manus OAuth user from the app template is no longer used; students and
+  // parents sign in with name + PIN (the profile below).
+  const user: User | null = null;
 
   let profile: ProfileRow | null = null;
   try {
