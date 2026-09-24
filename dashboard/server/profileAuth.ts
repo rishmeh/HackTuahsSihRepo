@@ -23,8 +23,16 @@ export function verifyPin(pin: string, stored: string): boolean {
   return timingSafeEqual(actual, expected);
 }
 
+// Without JWT_SECRET, sign with a random key made at startup rather than a
+// value written in the source that anyone could use to forge a login. Logins
+// then last until the server restarts.
+const FALLBACK_SECRET = randomBytes(32).toString("hex");
+if (!ENV.cookieSecret) {
+  console.warn("[auth] JWT_SECRET is not set; using a temporary key, so logins reset when the server restarts.");
+}
+
 function getSecret() {
-  const secret = ENV.cookieSecret || "tabletot-dev-secret-change-me";
+  const secret = ENV.cookieSecret || FALLBACK_SECRET;
   return new TextEncoder().encode(secret);
 }
 

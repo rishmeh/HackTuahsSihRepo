@@ -11,7 +11,7 @@ type QuizQuestion = {
   type: string;
 };
 
-function QuizCard({ quiz, onDelete }: { quiz: { id: number; topic: string; questions: string; totalQuestions: number; score: number | null; createdAt: Date }; onDelete: () => void }) {
+function QuizCard({ quiz, onDelete, onFinished }: { quiz: { id: number; topic: string; questions: string; totalQuestions: number; score: number | null; createdAt: Date }; onDelete: () => void; onFinished: (score: number) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [currentQ, setCurrentQ] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -40,6 +40,7 @@ function QuizCard({ quiz, onDelete }: { quiz: { id: number; topic: string; quest
       setRevealed(false);
     } else {
       setDone(true);
+      onFinished(score);
     }
   };
 
@@ -136,9 +137,13 @@ function QuizCard({ quiz, onDelete }: { quiz: { id: number; topic: string; quest
   );
 }
 
-export function QuizzesWidget({ profileId }: { profileId: number }) {
-  const { data: quizList, refetch } = trpc.quizzes.listPublic.useQuery({ ownerProfileId: profileId }, { refetchInterval: 3000 });
+export function QuizzesWidget() {
+  const { data: quizList, refetch } = trpc.quizzes.list.useQuery(undefined, { refetchInterval: 3000 });
   const del = trpc.quizzes.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Quiz deleted"); } });
+  const saveScore = trpc.quizzes.updateScore.useMutation({
+    onSuccess: () => refetch(),
+    onError: () => toast.error("Your score couldn't be saved"),
+  });
 
   return (
     <div className="rounded-2xl bg-card border shadow-sm p-5 flex flex-col gap-3">
@@ -158,6 +163,7 @@ export function QuizzesWidget({ profileId }: { profileId: number }) {
             key={quiz.id}
             quiz={{ ...quiz, score: quiz.score ?? null }}
             onDelete={() => del.mutate({ id: quiz.id })}
+            onFinished={(score) => saveScore.mutate({ id: quiz.id, score })}
           />
         ))}
         {!quizList?.length && (

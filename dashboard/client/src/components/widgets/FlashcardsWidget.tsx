@@ -134,8 +134,8 @@ function FlashcardDeck({ deck, onDelete }: {
   );
 }
 
-export function FlashcardsWidget({ profileId }: { profileId: number }) {
-  const { data: deckList, refetch } = trpc.flashcards.listPublic.useQuery({ ownerProfileId: profileId }, { refetchInterval: 3000 });
+export function FlashcardsWidget() {
+  const { data: deckList, refetch } = trpc.flashcards.list.useQuery(undefined, { refetchInterval: 3000 });
   const del = trpc.flashcards.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Deck deleted"); } });
 
   return (

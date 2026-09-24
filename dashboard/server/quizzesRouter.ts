@@ -1,12 +1,25 @@
 /**
  * quizzesRouter.ts — tRPC CRUD for AI-generated quizzes.
+ *
+ * Every procedure works on the signed-in student's quizzes (or, for a parent,
+ * their linked student's, read-only). The ML server saves voice-made quizzes
+ * through the loopback-only REST route in _core/index.ts, not through here.
  */
-import { desc, eq } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { quizzes } from "../drizzle/schema";
 import { getDb } from "./db";
-import { protectedProfileProcedure, publicProcedure, router } from "./_core/trpc";
+import { protectedProfileProcedure, router } from "./_core/trpc";
 import { resolveStudentProfileId } from "./studentScope";
+import type { ProfileRow } from "../drizzle/schema";
+
+function requireStudent(profile: ProfileRow, action: string) {
+  if (profile.role !== "student") {
+    throw new TRPCError({ code: "FORBIDDEN", message: `Only the student can ${action}.` });
+  }
+  return profile.id;
+}
 
 export const quizzesRouter = router({
   /** List all quizzes for the current student profile, newest first. */
@@ -19,23 +32,22 @@ export const quizzesRouter = router({
       .orderBy(desc(quizzes.createdAt));
   }),
 
-  /** Save a newly generated quiz (called by voice agent or future UI). */
+  /** Save a newly generated quiz for the signed-in student. */
   create: protectedProfileProcedure
     .input(
       z.object({
         topic: z.string().min(1).max(200),
         questions: z.string().default("[]"),  // JSON-stringified array
         totalQuestions: z.number().int().default(0),
-        ownerProfileId: z.number().int().optional(), // override for voice agent
       })
     )
     .mutation(async ({ input, ctx }) => {
+      const studentId = requireStudent(ctx.profile, "add quizzes");
       const db = await getDb();
-      const profileId = input.ownerProfileId ?? resolveStudentProfileId(ctx.profile);
       const [row] = await db
         .insert(quizzes)
         .values({
-          ownerProfileId: profileId,
+          ownerProfileId: studentId,
           topic: input.topic,
           questions: input.questions,
           totalQuestions: input.totalQuestions,
@@ -46,58 +58,25 @@ export const quizzesRouter = router({
 
   /** Update quiz score after the student completes it. */
   updateScore: protectedProfileProcedure
-    .input(z.object({ id: z.number().int(), score: z.number().int() }))
+    .input(z.object({ id: z.number().int(), score: z.number().int().min(0) }))
     .mutation(async ({ input, ctx }) => {
+      const studentId = requireStudent(ctx.profile, "record their own quiz score");
       const db = await getDb();
       const [row] = await db
         .update(quizzes)
         .set({ score: input.score })
-        .where(eq(quizzes.id, input.id))
+        .where(and(eq(quizzes.id, input.id), eq(quizzes.ownerProfileId, studentId)))
         .returning();
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Quiz not found." });
       return row;
     }),
 
   delete: protectedProfileProcedure
     .input(z.object({ id: z.number().int() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const studentId = requireStudent(ctx.profile, "delete their quizzes");
       const db = await getDb();
-      await db.delete(quizzes).where(eq(quizzes.id, input.id));
+      await db.delete(quizzes).where(and(eq(quizzes.id, input.id), eq(quizzes.ownerProfileId, studentId)));
       return { deleted: input.id };
-    }),
-
-  /** Public endpoint for the voice agent (uses profileId param directly). */
-  createPublic: publicProcedure
-    .input(
-      z.object({
-        ownerProfileId: z.number().int().default(0),
-        topic: z.string().min(1).max(200),
-        questions: z.string().default("[]"),
-        totalQuestions: z.number().int().default(0),
-      })
-    )
-    .mutation(async ({ input }) => {
-      const db = await getDb();
-      const [row] = await db
-        .insert(quizzes)
-        .values({
-          ownerProfileId: input.ownerProfileId,
-          topic: input.topic,
-          questions: input.questions,
-          totalQuestions: input.totalQuestions,
-        })
-        .returning();
-      return row;
-    }),
-
-  /** Public list by profileId for the voice agent / REST callers. */
-  listPublic: publicProcedure
-    .input(z.object({ ownerProfileId: z.number().int().default(0) }))
-    .query(async ({ input }) => {
-      const db = await getDb();
-      return db
-        .select()
-        .from(quizzes)
-        .where(eq(quizzes.ownerProfileId, input.ownerProfileId))
-        .orderBy(desc(quizzes.createdAt));
     }),
 });
