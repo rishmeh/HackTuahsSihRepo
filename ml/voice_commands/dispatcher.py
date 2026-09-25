@@ -1,6 +1,7 @@
 """Dispatch a parsed Intent to the backend and return a spoken reply (or None for LLM)."""
 from __future__ import annotations
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -226,6 +227,8 @@ def dispatch(intent: Intent, profile_id: int = 0) -> Optional[str]:
     # ── Flashcard creation ─────────────────────────────────────────────────────
     if n == "create_flashcards":
         topic = intent.params.get("topic", "").strip()
+        # Clean up any accidental pronoun prefixes like "him, ", "her, ", "me on "
+        topic = re.sub(r"^(?:him|her|them|me|us)[,\s]+(?:on\s+|about\s+)?", "", topic, flags=re.I).strip()
         if not topic:
             return "What topic should the flashcards cover?"
         try:
@@ -236,7 +239,7 @@ def dispatch(intent: Intent, profile_id: int = 0) -> Optional[str]:
 
             req = FlashcardRequest(
                 subject=topic,
-                num_cards=8,
+                num_cards=5,
                 student=FlashcardStudentProfile(age=10, covered_topics=[topic]),
             )
             deck_obj, _ = _asyncio.run(generate_and_format_deck(req))

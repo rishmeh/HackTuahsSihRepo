@@ -78,9 +78,11 @@ async def llm_route(text: str) -> Optional[Intent]:
             "system": _SYSTEM,
             "prompt": text,
             "stream": False,
-            "options": {"num_predict": 30, "temperature": 0, "think": False},
+            "think": False,          # top-level flag — disables thinking mode
+            "keep_alive": config.SLM_KEEP_ALIVE,
+            "options": {"num_predict": 30, "temperature": 0},
         }
-        async with httpx.AsyncClient(timeout=8) as client:
+        async with httpx.AsyncClient(timeout=12) as client:
             r = await client.post(f"{config.OLLAMA_BASE_URL}/api/generate", json=payload)
         if not r.is_success:
             logger.warning("LLM router HTTP %d", r.status_code)

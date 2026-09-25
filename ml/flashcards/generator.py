@@ -20,7 +20,7 @@ from flashcards.template import SYSTEM_PROMPT, build_user_prompt, format_deck
 logger = logging.getLogger(__name__)
 
 
-def _parse_cards(raw: str, expected_count: int) -> Optional[list[Flashcard]]:
+def _parse_cards(raw: str, expected_count: int, default_topic: str = "general") -> Optional[list[Flashcard]]:
     """
     Parse the SLM raw output into a list of Flashcard objects.
     Strips optional markdown fences before attempting JSON parse.
@@ -32,29 +32,49 @@ def _parse_cards(raw: str, expected_count: int) -> Optional[list[Flashcard]]:
 
     try:
         data = json.loads(text)
-        # SLM may wrap cards in an object (e.g. {"cards": [...]}) — unwrap it.
-        if isinstance(data, dict):
-            for key in ("cards", "flashcards", "data", "items", "results"):
+    except Exception as exc:
+        logger.warning("Flashcard JSON parse error: %s | raw=%r", exc, raw[:200])
+        return None
+
+    raw_list: list = []
+    if isinstance(data, list):
+        raw_list = data
+    elif isinstance(data, dict):
+        if "front" in data or "question" in data:
+            raw_list = [data]
+        else:
+            for key in ("cards", "flashcards", "data", "items", "results", "deck"):
                 if key in data and isinstance(data[key], list):
-                    logger.info("Unwrapping SLM response from object key %r", key)
-                    data = data[key]
+                    raw_list = data[key]
                     break
             else:
                 logger.warning("Flashcard SLM returned non-list JSON: %r", text[:200])
                 return None
-        if not isinstance(data, list):
-            logger.warning("Flashcard SLM returned unexpected type: %r", text[:200])
-            return None
-        cards = [Flashcard(**item) for item in data]
-        if len(cards) != expected_count:
-            logger.warning(
-                "Expected %d flashcards but got %d. Proceeding with actual count.",
-                expected_count, len(cards)
-            )
-        return cards
-    except Exception as exc:
-        logger.warning("Flashcard parse error: %s | raw=%r", exc, raw[:200])
+    else:
         return None
+
+    cards: list[Flashcard] = []
+    for item in raw_list:
+        if not isinstance(item, dict):
+            continue
+        # Normalize field names from various SLM styles
+        if "front" not in item and "question" in item:
+            item["front"] = item["question"]
+        if "back" not in item and "answer" in item:
+            item["back"] = item["answer"]
+        if "topic" not in item or not item["topic"]:
+            item["topic"] = default_topic
+
+        try:
+            cards.append(Flashcard(**item))
+        except Exception as e:
+            logger.warning("Skipping malformed flashcard: %s | item=%r", e, item)
+
+    if not cards:
+        logger.warning("No valid flashcards parsed from SLM response.")
+        return None
+
+    return cards
 
 
 async def generate_flashcard_deck(req: FlashcardRequest) -> FlashcardDeck:
@@ -79,15 +99,16 @@ async def generate_flashcard_deck(req: FlashcardRequest) -> FlashcardDeck:
         "messages": messages,
         "stream": False,
         "think": False,
+        "keep_alive": config.SLM_KEEP_ALIVE,
         "format": "json",
         "options": {
             "temperature": 0.5,
-            "top_p": 0.9,
+            "num_predict": 2000,
         },
     }
 
     try:
-        async with httpx.AsyncClient(timeout=config.OLLAMA_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=config.OLLAMA_TIMEOUT * 2) as client:
             response = await client.post(
                 f"{config.OLLAMA_BASE_URL}/api/chat",
                 json=payload,
@@ -97,11 +118,11 @@ async def generate_flashcard_deck(req: FlashcardRequest) -> FlashcardDeck:
     except httpx.ConnectError:
         raise RuntimeError(f"Cannot connect to Ollama at {config.OLLAMA_BASE_URL}.")
     except httpx.TimeoutException:
-        raise RuntimeError(f"Ollama request timed out after {config.OLLAMA_TIMEOUT}s.")
+        raise RuntimeError(f"Ollama request timed out after {config.OLLAMA_TIMEOUT * 2}s.")
     except httpx.HTTPStatusError as exc:
         raise RuntimeError(f"Ollama HTTP error: {exc}")
 
-    cards = _parse_cards(raw_content, req.num_cards)
+    cards = _parse_cards(raw_content, req.num_cards, default_topic=req.subject)
     if cards is None:
         raise RuntimeError(
             "Flashcard generation failed - SLM returned unparseable output. "

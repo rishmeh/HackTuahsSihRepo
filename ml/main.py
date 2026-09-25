@@ -90,6 +90,10 @@ app.include_router(tasks_proxy_router)
 @app.on_event("startup")
 async def on_startup():
     start_scheduler()
+    # Pre-load the SLM into Ollama memory so the first voice query has no
+    # cold-start delay. Non-blocking — a warning is logged if Ollama is down.
+    from chat.slm_client import warm_slm
+    await warm_slm()
     logger.info("ML backend v3.0 started.")
 
 

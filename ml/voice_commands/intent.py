@@ -135,7 +135,7 @@ _LIST_NOTES = re.compile(
 _LIST_TASKS = re.compile(
     r"(?:what|show|list|tell|read|check|do\s+i\s+have)\s+(?:me\s+)?(?:my\s+)?(?:tasks?|to-?dos?|to-?do\s+list)"
     r"|list\s+(?:all\s+)?(?:my\s+)?(?:tasks?|to-?dos?)"
-    r"|what(?:'s| is)\s+on\s+my\s+(?:to-?do|task)(?:\s+list)?"
+    r"|what(?:'s| is)\s+(?:on|in)\s+my\s+(?:to-?do|task)(?:\s+list)?"
     r"|(?:tasks?|to-?dos?)\s+(?:do\s+i\s+have|are\s+(?:there|pending))", re.I)
 
 _WEATHER = re.compile(

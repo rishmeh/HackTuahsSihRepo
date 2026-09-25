@@ -103,6 +103,8 @@ async def generate_quiz_via_ollama(req: QuizRequest) -> Optional[str]:
             "temperature": 0.5,
             "num_predict": 2000,
         },
+        "think": False,
+        "keep_alive": config.SLM_KEEP_ALIVE,
         "stream": False,
         "format": "json"
     }

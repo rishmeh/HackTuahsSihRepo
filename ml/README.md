@@ -1,6 +1,6 @@
 # KidBot ML Workflow
 
-Child-safe chat API + quiz generator. Built with FastAPI, Ollama (local SLM), and OpenRouter API.
+Child-safe chat API + quiz generator + voice agent. Built with FastAPI, Ollama (local SLM), and OpenRouter API.
 
 ---
 
@@ -36,12 +36,19 @@ ml/
 
 ## Setup
 
-### 1. Prerequisites
+> Choose **Option A** if you are running the full TableTot stack (dashboard + hardware + ml together).
+> Choose **Option B** if you only want to run `ml/` as a standalone service.
+
+---
+
+### Option A — Full-stack setup (part of the monorepo)
+
+#### 1. Prerequisites
 - Python 3.11+
 - [Ollama](https://ollama.com) installed and running
 - An API key from [OpenRouter](https://openrouter.ai/)
 
-### 2. Install dependencies
+#### 2. Install dependencies
 ```bash
 cd ml
 pip install -r requirements.txt
@@ -49,45 +56,123 @@ pip install -e ..    # installs vision/, learner/, persona/ packages (from pypro
 python -m spacy download en_core_web_sm
 ```
 
-### 3. Configure environment
+#### 3. Configure environment
 ```bash
 cp .env.example .env
 # Edit .env and add your OPENROUTER_API_KEY
 ```
 
-### 4. Pull Ollama models
-You will need a standard chat model and a vision-capable model (for the `/chat/vision` endpoint).
-
+#### 4. Pull Ollama models
 ```bash
 # Chat model (default in config.py)
-ollama pull qwen3.5:2b
+ollama pull qwen3.5:4b
 
 # Vision model (default in config.py)
 ollama pull llava-phi3
 ```
 
-### 5. Run the server
+#### 5. Run the server
 ```bash
+cd ml
 uvicorn main:app --reload --port 8000
 ```
 API docs available at: http://localhost:8000/docs
 
-### 6. Run the Voice Agent (STT & TTS)
-The repository includes a laptop voice worker that uses **Moonshine STT**, **Piper TTS**, and **openWakeWord**. It listens for `"Hey Jarvis"` through the laptop microphone and plays synthesized speech through the laptop's default speaker.
+---
 
-In a separate terminal while FastAPI is running, execute:
+### Option B — Standalone (ml/ only, no dashboard or hardware)
+
+Running `ml/` standalone skips the dashboard, hardware bridge, and robot face/servo integration. The voice agent and API server work independently.
+
+#### 1. Prerequisites
+- Python 3.11+
+- [Ollama](https://ollama.com) installed and running locally
+
+#### 2. Create and activate a virtual environment
 ```bash
+cd ml
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# macOS / Linux
+source .venv/bin/activate
+```
+
+#### 3. Install Python dependencies
+```bash
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+```
+
+#### 4. Install the local packages (learner, persona, voice_commands, etc.)
+These packages live in the repo root but are required by the ML server. Install them in editable mode from inside `ml/`:
+
+```bash
+pip install -e ..
+```
+
+> **Note:** If you only need the FastAPI server (no voice agent), you can skip the packages above and disable the affected routes. But for the full feature set including the voice agent, `pip install -e ..` is required.
+
+#### 5. Configure environment
+```bash
+cp .env.example .env
+```
+Then edit `.env`. Minimum required variables for standalone use:
+
+```env
+# Required for local LLM
+OLLAMA_MODEL=qwen3.5:4b
+
+# Optional: cloud escalation
+OPENROUTER_API_KEY=your_key_here
+
+# Optional: weather commands in voice agent
+OPENWEATHERMAP_API_KEY=your_key_here
+```
+
+#### 6. Pull Ollama models
+```bash
+ollama pull qwen3.5:4b
+```
+
+#### 7. Start the FastAPI server
+```bash
+cd ml
+uvicorn main:app --reload --port 8000
+```
+API docs: http://localhost:8000/docs
+
+#### 8. (Optional) Run the Voice Agent
+In a **separate terminal** (with the venv activated and the server running):
+
+```bash
+cd ml
 python voice_agent.py
 ```
 
-The first run downloads the speech models. The Pi does not send or receive audio.
+Or for always-listening mode (no wake word):
+```bash
+python voice_agent.py --mode continuous
+```
+
+The first run automatically downloads:
+- **Moonshine Tiny** STT model — used for speech-to-text (fully cached on first use)
+- **Piper TTS** `en_US-lessac-medium` voice model — used for text-to-speech
+- **openWakeWord** `hey_jarvis` model — used for wake-word detection
+
+> **Upgrading to Moonshine base:** Change `ModelArch.TINY` → `ModelArch.BASE` in
+> [`voice_agent.py`](voice_agent.py) line 121. The base model (~30 MB) is downloaded
+> from `download.moonshine.ai` on first run. If the download times out or is throttled,
+> run `python download_moonshine_base.py` which uses `curl.exe` with resume support.
 
 ---
 
 ## Chat Pipeline — Data Boundaries
 
 | Component | Receives | Does NOT receive |
-|-----------|----------|-----------------|
+|-----------|----------|-----------------| 
 | `sanitizer` | Raw query | — |
 | `slm_client` | Sanitized query + **full StudentProfile** | — |
 | `complexity_judge` | Sanitized query + SLM response | StudentProfile |
@@ -216,3 +301,4 @@ See [../persona/README.md](../persona/README.md).
 > `ml/chat/vision_client.py` and `/chat/vision` mean *multimodal LLM*
 > (asking questions about an image). The `vision/` package means
 > *camera and faces*.
+

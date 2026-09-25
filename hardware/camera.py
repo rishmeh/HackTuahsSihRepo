@@ -1,8 +1,11 @@
 """Camera capture adapters for the Pi peripheral daemon.
 
-``auto`` prefers a Pi CSI camera through Picamera2 and falls back to a USB
-UVC camera through OpenCV.  Frames leave the Pi as JPEG; no vision model runs
-here.
+``usb``  — USB UVC camera via OpenCV (new default).
+``csi``  — Raspberry Pi CSI camera via Picamera2.
+``auto`` — tries CSI first, falls back to USB.
+``off``  — disables the camera entirely.
+
+Frames leave the Pi as JPEG; no vision model runs here.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ logger = logging.getLogger(__name__)
 class CameraCapture:
     def __init__(
         self,
-        camera_type: str = "auto",
+        camera_type: str = "usb",   # changed default from "auto" → "usb"
         index: int = 0,
         width: int = 640,
         height: int = 480,
@@ -32,6 +35,11 @@ class CameraCapture:
 
         if camera_type == "off":
             return
+
+        # ---------------------------------------------------------------
+        # CSI path (Picamera2) — only attempted when explicitly requested
+        # or when camera_type == "auto".
+        # ---------------------------------------------------------------
         if camera_type in {"auto", "csi"}:
             try:
                 from picamera2 import Picamera2
@@ -50,18 +58,40 @@ class CameraCapture:
             except Exception as exc:
                 if camera_type == "csi":
                     raise RuntimeError(f"could not start CSI camera: {exc}") from exc
-                logger.info("CSI camera unavailable, trying USB camera: %s", exc)
+                # auto: fall through to USB
+                logger.info("CSI camera unavailable, trying USB: %s", exc)
 
-        capture = cv2.VideoCapture(index)
+        # ---------------------------------------------------------------
+        # USB path (OpenCV VideoCapture) — default for this project
+        # ---------------------------------------------------------------
+        # CAP_V4L2 backend on Linux avoids GStreamer pipeline overhead and
+        # gives lower latency for USB webcams.
+        capture = cv2.VideoCapture(index, cv2.CAP_V4L2)
+        if not capture.isOpened():
+            # Fallback: let OpenCV choose the backend
+            capture.release()
+            capture = cv2.VideoCapture(index)
         if not capture.isOpened():
             capture.release()
             raise RuntimeError(f"could not open USB camera index {index}")
+
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        # Keep the internal buffer at 1 frame so we always get the newest
+        # frame rather than a stale one sitting in the queue.
         capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        # MJPEG from the USB camera is already compressed; use it directly
+        # to reduce USB bandwidth and CPU decode cost.
+        capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+
         self._capture = capture
         self.kind = "usb"
-        logger.info("USB camera %d started at %dx%d", index, width, height)
+        actual_w = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_h = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        logger.info(
+            "USB camera %d started at %dx%d (requested %dx%d)",
+            index, actual_w, actual_h, width, height,
+        )
 
     def read(self) -> tuple[bool, Optional[np.ndarray]]:
         if self._picamera is not None:

@@ -21,10 +21,22 @@ class Difficulty(str, Enum):
 class Flashcard(BaseModel):
     """A single study flashcard with a front (question/prompt) and back (answer)."""
 
-    front: str = Field(..., min_length=3, description="Question or prompt on the card")
+    front: str = Field(..., min_length=1, description="Question or prompt on the card")
     back: str = Field(..., min_length=1, description="Answer or explanation on the card")
-    topic: str = Field(..., description="The topic this card belongs to")
+    topic: str = Field(default="general", description="The topic this card belongs to")
     difficulty: Difficulty = Difficulty.MEDIUM
+
+    @field_validator("difficulty", mode="before")
+    @classmethod
+    def normalize_difficulty(cls, v: object) -> Difficulty:
+        if isinstance(v, Difficulty):
+            return v
+        s = str(v).lower()
+        if "easy" in s:
+            return Difficulty.EASY
+        if "hard" in s:
+            return Difficulty.HARD
+        return Difficulty.MEDIUM
 
 
 class FlashcardDeck(BaseModel):
@@ -52,8 +64,8 @@ class FlashcardStudentProfile(BaseModel):
 
 class FlashcardRequest(BaseModel):
     student: FlashcardStudentProfile
-    subject: str = Field(..., min_length=2, max_length=100)
-    num_cards: int = Field(default=10, ge=5, le=20)
+    subject: str = Field(..., min_length=1, max_length=100)
+    num_cards: int = Field(default=5, ge=1, le=20)
 
     @field_validator("subject")
     @classmethod

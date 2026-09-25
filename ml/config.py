@@ -13,7 +13,7 @@ load_dotenv()
 # Local SLM (Ollama)
 # ---------------------------------------------------------------------------
 OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:2b")
+OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
 # Separate model for vision (multimodal) requests. Must support image inputs.
 OLLAMA_VISION_MODEL: str = os.getenv("OLLAMA_VISION_MODEL", "llava-phi3")
 
@@ -26,6 +26,23 @@ OLLAMA_THINK: bool = os.getenv("OLLAMA_THINK", "false").lower() == "true"
 
 # Longer timeout for thinking-mode calls (think=True); reasoning takes more time.
 OLLAMA_THINK_TIMEOUT: float = float(os.getenv("OLLAMA_THINK_TIMEOUT", "120"))
+
+# ---------------------------------------------------------------------------
+# SLM warm-loading
+# ---------------------------------------------------------------------------
+# Ollama keep_alive value sent with every request.
+#   "-1"  — keep the model loaded in VRAM/RAM forever (never evict).
+#   "5m"  — Ollama default: evict after 5 minutes of idleness.
+# Set to "-1" to ensure zero cold-start on the first query after silence.
+_keep_alive_env = os.getenv("SLM_KEEP_ALIVE", "-1")
+SLM_KEEP_ALIVE = int(_keep_alive_env) if _keep_alive_env == "-1" else _keep_alive_env
+
+# ---------------------------------------------------------------------------
+# Voice streaming
+# ---------------------------------------------------------------------------
+# Minimum accumulated characters before a partial sentence is flushed to TTS.
+# Larger = fewer TTS calls (more natural pauses); smaller = lower latency.
+SLM_VOICE_CHUNK_CHARS: int = int(os.getenv("SLM_VOICE_CHUNK_CHARS", "80"))
 
 # ---------------------------------------------------------------------------
 # Escalation strategy

@@ -20,16 +20,44 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
+import socket
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 logger = logging.getLogger(__name__)
 
-LAPTOP_URL = os.getenv("LAPTOP_URL", "http://192.168.0.164:8000")
+# mDNS hostname the laptop advertises (via avahi-daemon / Bonjour).
+# Falls back to LAPTOP_URL env var (or the default below) if mDNS fails.
+_MDNS_LAPTOP_HOST = "tabletot-laptop.local"
+_LAPTOP_URL_DEFAULT = os.getenv("LAPTOP_URL", f"http://{_MDNS_LAPTOP_HOST}:8000")
+
 POLL_INTERVAL = 0.25
 # When TRACKING_MODE is enabled, frames are sent faster for snappier servo response.
 TRACKING_MODE = os.getenv("TRACKING_MODE", "true").lower() == "true"
 FRAME_INTERVAL = 0.15 if TRACKING_MODE else 0.5
+
+
+def _resolve_laptop_url() -> str:
+    """
+    Try to resolve tabletot-laptop.local via mDNS.
+    Returns the resolved http://IP:8000 URL, or the LAPTOP_URL env var fallback.
+
+    Why not just use the hostname in the URL?
+    httpx / requests will resolve it on every request; doing it once at
+    startup avoids repeated mDNS RTTs and surfaces DNS failures early.
+    """
+    fallback = _LAPTOP_URL_DEFAULT
+    try:
+        ip = socket.getaddrinfo(_MDNS_LAPTOP_HOST, 8000, proto=socket.IPPROTO_TCP)[0][4][0]
+        url = f"http://{ip}:8000"
+        logger.info("mDNS resolved %s → %s", _MDNS_LAPTOP_HOST, url)
+        return url
+    except socket.gaierror:
+        logger.info(
+            "mDNS resolution of %s failed — using LAPTOP_URL=%s",
+            _MDNS_LAPTOP_HOST, fallback,
+        )
+        return fallback
 
 
 # ---------------------------------------------------------------------------
@@ -76,17 +104,19 @@ class PeripheralDaemon:
 
     def __init__(
         self,
-        laptop_url: str = LAPTOP_URL,
+        laptop_url: str = _LAPTOP_URL_DEFAULT,
         head_pin: int = 12,
         body_pin: int = 13,
         camera_index: int = 0,
-        camera_type: str = "auto",
+        camera_type: str = "usb",
         display_driver: str = "hdmi",
         display_width: int = 800,
         display_height: int = 480,
         fullscreen: bool = True,
     ) -> None:
-        self.laptop_url = laptop_url.rstrip("/")
+        # Prefer mDNS resolution at startup; fall back to the supplied URL.
+        self.laptop_url = _resolve_laptop_url() if laptop_url == _LAPTOP_URL_DEFAULT \
+            else laptop_url.rstrip("/")
         self.camera_index = camera_index
         self.camera_type = camera_type
         self._running = False
@@ -115,6 +145,7 @@ class PeripheralDaemon:
         # ------------------------------------------------------------------
         # Display
         # ------------------------------------------------------------------
+        self._uses_pygame = False
         if display_driver == "st7789v":
             from hardware.st7789v_display import ST7789VDisplay
             self.display = ST7789VDisplay()
@@ -125,6 +156,7 @@ class PeripheralDaemon:
                 height=display_height,
                 fullscreen=fullscreen,
             )
+            self._uses_pygame = True
         else:
             raise ValueError("DISPLAY_DRIVER must be hdmi or st7789v")
 
@@ -141,16 +173,22 @@ class PeripheralDaemon:
 
     def start(self) -> None:
         logger.info(
-            "Starting Pi bridge; laptop=%s camera=%s",
+            "Starting Pi bridge; laptop=%s camera=%s display=%s",
             self.laptop_url,
             self.camera_type,
+            "hdmi(pygame)" if self._uses_pygame else "st7789v(spi)",
         )
         self._running = True
         if not self._check_laptop():
             logger.warning("Laptop is offline at startup — will keep retrying")
 
         self.servos.idle()
-        self.display.start()
+
+        # For the SPI display (ST7789V) start its own background render thread.
+        # For the pygame (HDMI) display, start() is deferred to run() so that
+        # pygame.init() and all subsequent SDL calls happen on the main thread.
+        if not self._uses_pygame:
+            self.display.start()
         self.display.set_state("idle")
 
         # Camera is optional
@@ -178,7 +216,7 @@ class PeripheralDaemon:
         if self._camera_thread:
             self._camera_thread.join(timeout=3.0)
         self.servos.cleanup()
-        self.display.stop()
+        self.display.stop()   # pygame.quit() or SPI teardown — safe from main thread
         if self.camera is not None:
             self.camera.release()
         self.http.close()
@@ -375,22 +413,61 @@ class PeripheralDaemon:
     # ------------------------------------------------------------------
 
     def run(self) -> None:
-        self.start()
+        """
+        Main entry point.  Must be called from the main thread.
+
+        For the HDMI (pygame) display:
+          - display.start() is called here (main thread) to satisfy SDL2's
+            requirement that init + event pump + flip all happen on the same
+            thread that created the window.
+          - The render loop runs at 30 fps in this thread; camera, poll, and
+            telemetry run as daemon threads in the background.
+
+        For the ST7789V (SPI) display:
+          - The display already runs its own background thread (no SDL).
+          - This method just sleeps in a 1-second telemetry loop as before.
+        """
+        self.start()   # starts background threads; defers pygame init for hdmi
 
         def signal_handler(signum, frame) -> None:
             del frame
             logger.info("Signal %s received — stopping", signum)
-            self.stop()
-            raise SystemExit(0)
+            self._running = False   # signal the main loop to exit cleanly
 
-        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGINT,  signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
+
+        # Start a background telemetry thread so it never blocks the render loop.
+        telemetry_thread = threading.Thread(
+            target=self._telemetry_loop, daemon=True, name="tabletot-telemetry"
+        )
+        telemetry_thread.start()
+
         try:
-            while self._running:
-                self._report_telemetry()
-                time.sleep(1.0)
+            if self._uses_pygame:
+                # -------------------------------------------------------
+                # Pygame path: main thread owns the SDL event + render loop
+                # -------------------------------------------------------
+                self.display.start()   # pygame.init() + window creation here
+                while self._running:
+                    if not self.display.tick():   # draw frame + pump events
+                        break                     # window closed by user
+            else:
+                # -------------------------------------------------------
+                # ST7789V / headless path: original sleep loop
+                # -------------------------------------------------------
+                while self._running:
+                    time.sleep(1.0)
         except KeyboardInterrupt:
+            pass
+        finally:
             self.stop()
+
+    def _telemetry_loop(self) -> None:
+        """Report telemetry to the laptop every second (background thread)."""
+        while self._running:
+            self._report_telemetry()
+            time.sleep(1.0)
 
 
 def main() -> None:
@@ -400,9 +477,9 @@ def main() -> None:
         handlers=[logging.StreamHandler(sys.stdout)],
     )
     PeripheralDaemon(
-        laptop_url=LAPTOP_URL,
+        laptop_url=_LAPTOP_URL_DEFAULT,
         camera_index=int(os.getenv("CAMERA_INDEX", "0")),
-        camera_type=os.getenv("CAMERA_TYPE", "off"),
+        camera_type=os.getenv("CAMERA_TYPE", "usb"),
         display_driver=os.getenv("DISPLAY_DRIVER", "hdmi").lower(),
         display_width=int(os.getenv("DISPLAY_WIDTH", "800")),
         display_height=int(os.getenv("DISPLAY_HEIGHT", "480")),

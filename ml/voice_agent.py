@@ -3,7 +3,7 @@ voice_agent.py - Voice Interface for the ML Backend
 
 Uses:
 - openWakeWord ("hey_jarvis") for wakeword detection
-- Moonshine Tiny for STT
+- Moonshine Base for STT
 - Piper TTS for voice responses
 - Intent parser handles time/weather/timers/alarms/notes/tasks locally
 - Falls through to /chat for everything else
@@ -55,6 +55,8 @@ from voice_commands.dispatcher import dispatch as dispatch_intent
 from voice_commands.router import llm_route
 from persona_setup import sessions as persona_sessions
 from quiz_sessions import sessions as quiz_sessions
+from chat.slm_client import stream_slm_voice
+from chat.models import StudentProfile
 
 # Profile ID of the active user. Defaults to 1 (the first created student profile)
 # so local testing syncs properly with the dashboard.
@@ -124,7 +126,7 @@ moonshine_model = MoonshineTranscriber(model_path=_model_path, model_arch=_model
 
 RATE             = 16000
 CHUNK            = 1280
-VAD_THRESHOLD    = 500
+VAD_THRESHOLD    = 400   # RMS level; lower = more sensitive (was 500, too high for many mics)
 SILENCE_DURATION = 1.5
 
 audio_queue = queue.Queue()
@@ -142,7 +144,7 @@ def set_robot_state(state_name: str):
             "face_state": state_name,
             "servo_state": state_name
         }, timeout=2)
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.RequestException:
         pass  # Fail silently if backend is down
 
 def speak_text(text: str):
@@ -157,9 +159,9 @@ def speak_text(text: str):
     if not audio_bytes:
         set_robot_state("listening")
         return
-        
+
     audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
-    
+
     # Play synchronously (Piper lessac-medium is 22050 Hz)
     sd.play(audio_array, samplerate=22050)
     sd.wait()
@@ -190,20 +192,34 @@ def main():
     state = "RECORDING" if _ARGS.mode == "continuous" else "WAKEWORD"
     recorded_frames, silence_frames = [], 0
     max_silence_frames = int(RATE / CHUNK * SILENCE_DURATION)
-    
-    with sd.InputStream(samplerate=RATE, channels=1, dtype='int16', blocksize=CHUNK, callback=audio_callback):
+
+    try:
+        stream = sd.InputStream(samplerate=RATE, channels=1, dtype='int16', blocksize=CHUNK, callback=audio_callback)
+    except sd.PortAudioError as e:
+        print("\n" + "!" * 60)
+        print("ERROR: Could not open microphone input stream.")
+        print(f"Details: {e}")
+        print("\nHow to fix on Windows:")
+        print("1. Check if your microphone was muted via your keyboard hotkey (e.g. F4 or Fn+F4).")
+        print("2. Open Windows Settings > Privacy & security > Microphone:")
+        print("   - Turn 'Microphone access' ON")
+        print("   - Turn 'Let desktop apps access your microphone' ON")
+        print("!" * 60 + "\n")
+        return
+
+    with stream:
         while True:
             chunk = audio_queue.get()
-            
+
             if state == "WAKEWORD":
                 prediction = oww_model.predict(chunk.flatten())
-                
+
                 # Check if wakeword confidence exceeds threshold
                 confidence = 0.0
                 for model_name, score in prediction.items():
                     if score > 0.5:
                         confidence = score
-                
+
                 if confidence > 0.5:
                     print("\n[Wakeword Detected! Listening...]")
                     set_robot_state("listening")
@@ -222,7 +238,7 @@ def main():
                 if silence_frames > max_silence_frames:
                     print("[Silence detected, processing...]")
                     state = "PROCESSING"
-                    
+
                     full_audio = np.concatenate(recorded_frames, axis=0).flatten()
                     float_audio = full_audio.astype(np.float32) / 32768.0
 
@@ -284,31 +300,40 @@ def main():
                                         if router_reply:
                                             speak_text(router_reply)
                                         else:
-                                            # Layer 3: full LLM chat
+                                            # Layer 3: streaming SLM — pipe
+                                            # sentence chunks straight to TTS
+                                            # as the model generates them.
                                             speak_text(_say("thinking", Situation.THINKING))
                                             set_robot_state("thinking")
-                                            print("Sending to LLM backend...")
-                                            payload = {
-                                                "query": transcription,
-                                                "student": {
-                                                    "name": "Voice User", "age": _STUDENT_AGE,
-                                                    "grade": f"{_STUDENT_AGE - 5}th grade" if _STUDENT_AGE > 5 else "unknown",
-                                                    "personality_traits": ["curious"],
-                                                    "interests": [], "language_level": "intermediate",
-                                                },
-                                                "session_id": SESSION_ID,
-                                                "student_id": profile_key,
-                                            }
-                                            try:
-                                                r = requests.post(API_URL, json=payload, timeout=150)
-                                                if r.status_code == 200:
-                                                    speak_text(r.json().get("answer", "No answer found."))
-                                                else:
-                                                    print(f"API Error: {r.status_code}")
+                                            print("Streaming from SLM...")
+
+                                            _student = StudentProfile(
+                                                name="Voice User",
+                                                age=_STUDENT_AGE,
+                                                grade=(
+                                                    f"{_STUDENT_AGE - 5}th grade"
+                                                    if _STUDENT_AGE > 5 else "unknown"
+                                                ),
+                                                personality_traits=["curious"],
+                                                interests=[],
+                                                language_level="intermediate",
+                                            )
+
+                                            async def _stream_and_speak():
+                                                got_any = False
+                                                async for chunk in stream_slm_voice(
+                                                    transcription,
+                                                    _student,
+                                                ):
+                                                    if not got_any:
+                                                        set_robot_state("speaking")
+                                                        got_any = True
+                                                    speak_text(chunk)
+                                                if not got_any:
                                                     speak_text(_say("error", Situation.ERROR))
-                                            except requests.exceptions.RequestException as e:
-                                                print(f"Connection Error: {e}")
-                                                speak_text(_say("error", Situation.ERROR))
+
+                                            import asyncio as _asyncio2
+                                            _asyncio2.run(_stream_and_speak())
 
                         except Exception as e:
                             print(f"Error during processing: {e}")
@@ -318,19 +343,19 @@ def main():
 
                     in_session = quiz_sessions.is_active(str(ACTIVE_PROFILE_ID)) or persona_sessions.is_active(str(ACTIVE_PROFILE_ID))
                     is_continuous = _ARGS.mode == "continuous" or in_session
-                    
+
                     ready_msg = "Speak again." if is_continuous else "Say 'Hey Jarvis'."
                     print(f"\nReady. {ready_msg}")
                     state = "RECORDING" if is_continuous else "WAKEWORD"
-                    
+
                     if state == "WAKEWORD":
                         set_robot_state("idle")
                     else:
                         set_robot_state("listening")
-                        
+
                     recorded_frames = []
                     silence_frames = 0
-                    
+
                     oww_model.reset()
                     while not audio_queue.empty():
                         audio_queue.get()

@@ -20,18 +20,19 @@ SYSTEM_PROMPT = textwrap.dedent("""\
     1. Each card must have a clear front (question or prompt) and back (answer/explanation).
     2. Use simple, encouraging language suited to the student's age.
     3. Never produce any content that is violent, sexual, hateful, or inappropriate.
-    4. You MUST respond ONLY with a valid JSON array - no extra text, no markdown fences.
+    4. You MUST respond ONLY with a valid JSON object — no extra text, no markdown fences.
 
-    JSON SCHEMA (respond exactly like this - an array of card objects):
-    [
-      {
-        "front": "<question or prompt>",
-        "back": "<answer or explanation>",
-        "topic": "<topic name from covered_topics>",
-        "difficulty": "easy" | "medium" | "hard"
-      },
-      ...
-    ]
+    JSON SCHEMA (output this exact structure):
+    {
+      "cards": [
+        {
+          "front": "<question or prompt>",
+          "back": "<answer or explanation>",
+          "topic": "<topic name>",
+          "difficulty": "easy"
+        }
+      ]
+    }
 """)
 
 
@@ -46,8 +47,8 @@ def build_user_prompt(req: FlashcardRequest) -> str:
         - Topics studied: {topics}
 
         Generate exactly {req.num_cards} flashcards covering the topics above.
-        Spread cards across all topics, varying difficulty levels.
-        Respond ONLY with the JSON array.
+        Keep answers short and easy to understand.
+        Respond ONLY with the raw JSON object.
     """)
 
 

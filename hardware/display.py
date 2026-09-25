@@ -3,6 +3,26 @@ hardware/display.py — Animated face shown on the Pi-connected IPS display.
 
 Uses pygame for hardware-accelerated 2D rendering.
 States: idle, listening, speaking, thinking, happy, sleeping, focus
+
+Threading model
+---------------
+pygame's SDL2 backend requires that ALL display operations (init, event pump,
+flip) happen on the **main thread**.  This class therefore does NOT run its
+own background thread.  Instead, callers must drive it by calling tick() in
+their main loop at the desired frame rate.
+
+Quick-start::
+
+    display = Display(width=800, height=480)
+    display.start()          # pygame.init + window creation, main thread only
+    try:
+        while running:
+            display.tick()   # draw one frame + pump events, call every ~33 ms
+    finally:
+        display.stop()
+
+set_state() and show_text() remain fully thread-safe and may be called from
+any thread (camera loop, poll loop, etc.).
 """
 
 from __future__ import annotations
@@ -39,14 +59,15 @@ MOUTH_Y = CENTER_Y + 50
 
 class Display:
     """
-    Animated face display running in a background thread.
-    Thread-safe: call set_state() from any thread.
+    Animated face display driven by the caller's main loop via tick().
+
+    Thread-safe: set_state() / show_text() may be called from any thread.
+    The tick() / start() / stop() methods MUST be called from the main thread.
     """
 
     def __init__(self, width: int = WIDTH, height: int = HEIGHT, fullscreen: bool = False):
         self.width = width
         self.height = height
-        self._running = False
         self._lock = threading.Lock()
         self._state = "idle"
         self._overlay: Optional[str] = None
@@ -54,39 +75,91 @@ class Display:
         self._animation_time = 0.0
         self._blink_timer = 0.0
         self._mouth_open = 0.0
-        self._thread: Optional[threading.Thread] = None
+        self._last_tick = time.monotonic()
+        self._running = False
 
+        self.screen: Optional[pygame.Surface] = None
+        self.clock: Optional[pygame.time.Clock] = None
+        self.font: Optional[pygame.font.Font] = None
+        self.small_font: Optional[pygame.font.Font] = None
+        self._fullscreen = fullscreen
+
+    # ------------------------------------------------------------------
+    # Lifecycle — MAIN THREAD ONLY
+    # ------------------------------------------------------------------
+
+    def start(self) -> None:
+        """Initialise pygame and open the window.  Must be called on the main thread."""
         pygame.init()
         pygame.mouse.set_visible(False)
 
-        flags = pygame.FULLSCREEN if fullscreen else 0
+        flags = pygame.FULLSCREEN if self._fullscreen else 0
         try:
-            self.screen = pygame.display.set_mode((width, height), flags)
+            self.screen = pygame.display.set_mode((self.width, self.height), flags)
         except pygame.error as exc:
-            logger.error("Failed to set display mode %dx%d: %s", width, height, exc)
+            logger.error("Failed to set display mode %dx%d: %s", self.width, self.height, exc)
             raise
 
         pygame.display.set_caption("Table Tot")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("Arial", 36, bold=True)
         self.small_font = pygame.font.SysFont("Arial", 24)
-
-    def start(self):
-        """Start the display loop in a background thread."""
         self._running = True
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-        logger.info("Display started")
+        self._last_tick = time.monotonic()
+        logger.info("Display started (%dx%d, fullscreen=%s)", self.width, self.height, self._fullscreen)
 
-    def stop(self):
-        """Stop the display loop and cleanup pygame."""
+    def tick(self) -> bool:
+        """
+        Render one frame and pump the SDL event queue.
+
+        Returns False if the window was closed (caller should stop the loop),
+        True otherwise.
+
+        Call this every ~33 ms (30 fps) from the main thread.
+        """
+        if not self._running or self.screen is None:
+            return False
+
+        now = time.monotonic()
+        dt = now - self._last_tick
+        self._last_tick = now
+        self._animation_time += dt
+        self._blink_timer += dt
+
+        # Pump SDL events — mandatory on Linux/SDL2 to keep the window alive.
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self._running = False
+                return False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+                self._running = False
+                return False
+
+        with self._lock:
+            state = self._state
+            overlay = self._overlay
+
+        self._draw_frame(state, overlay, dt)
+        pygame.display.flip()
+
+        if self.clock:
+            self.clock.tick(FPS)
+
+        return True
+
+    def stop(self) -> None:
+        """Clean up pygame.  Must be called on the main thread."""
         self._running = False
-        if self._thread:
-            self._thread.join(timeout=2.0)
+        if self._overlay_timer:
+            self._overlay_timer.cancel()
         pygame.quit()
         logger.info("Display stopped")
 
-    def set_state(self, state: str):
+    # ------------------------------------------------------------------
+    # Thread-safe state setters — safe to call from any thread
+    # ------------------------------------------------------------------
+
+    def set_state(self, state: str) -> None:
         """Change face state: idle, listening, speaking, thinking, happy, sleeping, focus"""
         valid = {"idle", "listening", "speaking", "thinking", "happy", "sleeping", "focus"}
         if state not in valid:
@@ -95,7 +168,7 @@ class Display:
         with self._lock:
             self._state = state
 
-    def show_text(self, text: str, duration: Optional[float] = None):
+    def show_text(self, text: str, duration: Optional[float] = None) -> None:
         """Show overlay text. If duration given, auto-clear after that many seconds."""
         with self._lock:
             self._overlay = text
@@ -106,7 +179,7 @@ class Display:
             self._overlay_timer.daemon = True
             self._overlay_timer.start()
 
-    def clear_text(self):
+    def clear_text(self) -> None:
         with self._lock:
             self._overlay = None
             self._overlay_timer = None
@@ -116,25 +189,12 @@ class Display:
         with self._lock:
             return self._state
 
-    def _loop(self):
-        """Main display loop."""
-        while self._running:
-            dt = self.clock.tick(FPS) / 1000.0
-            self._animation_time += dt
-            self._blink_timer += dt
+    # ------------------------------------------------------------------
+    # Rendering (all called inside tick(), main thread)
+    # ------------------------------------------------------------------
 
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self._running = False
-
-            with self._lock:
-                state = self._state
-                overlay = self._overlay
-                self._draw_frame(state, overlay, dt)
-
-            pygame.display.flip()
-
-    def _draw_frame(self, state: str, overlay: Optional[str], dt: float):
+    def _draw_frame(self, state: str, overlay: Optional[str], dt: float) -> None:
+        assert self.screen is not None
         self.screen.fill(BLACK)
 
         blink_cycle = self._blink_timer % 4.0
@@ -161,6 +221,7 @@ class Display:
             self._draw_overlay(overlay)
 
     def _draw_eyes(self, y, spacing, width, height, closed, state):
+        assert self.screen is not None
         left_x = CENTER_X - spacing
         right_x = CENTER_X + spacing
 
@@ -186,6 +247,7 @@ class Display:
                 pygame.draw.circle(self.screen, WHITE, highlight_pos, pupil_radius // 3)
 
     def _draw_mouth(self, x, y, state):
+        assert self.screen is not None
         mouth_width = 80
 
         if state == "happy":
@@ -206,6 +268,7 @@ class Display:
                 (x - 25, y - 8, 50, 25), 3.9, 6.0, 3)
 
     def _draw_eyebrows(self, state):
+        assert self.screen is not None
         y = EYE_Y - EYE_HEIGHT // 2 - 15
         left_x = CENTER_X - EYE_SPACING
         right_x = CENTER_X + EYE_SPACING
@@ -228,6 +291,7 @@ class Display:
                 (right_x - brow_width // 2, y), (right_x + brow_width // 2, y), 4)
 
     def _draw_overlay(self, text: str):
+        assert self.screen is not None and self.font is not None
         box_height = 100
         box_y = self.height - box_height
         s = pygame.Surface((self.width, box_height), pygame.SRCALPHA)
@@ -236,7 +300,7 @@ class Display:
 
         words = text.split()
         lines = []
-        current_line = []
+        current_line: list[str] = []
         for word in words:
             test = " ".join(current_line + [word])
             if self.font.size(test)[0] < self.width - 40:
