@@ -484,7 +484,7 @@ def main() -> None:
         laptop_url=_LAPTOP_URL_DEFAULT,
         camera_index=int(os.getenv("CAMERA_INDEX", "0")),
         camera_type=os.getenv("CAMERA_TYPE", "usb"),
-        display_driver=os.getenv("DISPLAY_DRIVER", "hdmi").lower(),
+        display_driver=os.getenv("DISPLAY_DRIVER", "st7789v").lower(),
         display_width=int(os.getenv("DISPLAY_WIDTH", "800")),
         display_height=int(os.getenv("DISPLAY_HEIGHT", "480")),
         fullscreen=os.getenv("DISPLAY_FULLSCREEN", "true").lower() == "true",

@@ -26,9 +26,14 @@ LAPTOP_URL="${LAPTOP_URL:-http://tabletot-laptop.local:8000}"
 if [[ "$LAPTOP_URL" != http://* && "$LAPTOP_URL" != https://* ]]; then
     LAPTOP_URL="http://$LAPTOP_URL"
 fi
+export LAPTOP_URL
 
-echo "Brain (laptop): $LAPTOP_URL"
-echo "Camera type:    ${CAMERA_TYPE:-usb}"
+DISPLAY_DRIVER="${DISPLAY_DRIVER:-st7789v}"
+export DISPLAY_DRIVER
+
+echo "Brain (laptop):  $LAPTOP_URL"
+echo "Camera type:     ${CAMERA_TYPE:-usb}"
+echo "Display driver:  $DISPLAY_DRIVER"
 echo "Starting camera upload, face display and servo command polling..."
 echo ""
 
