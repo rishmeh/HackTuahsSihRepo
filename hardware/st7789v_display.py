@@ -184,19 +184,27 @@ class ST7789VDisplay:
             frame[write] = value >> 8
             frame[write + 1] = value & 0xFF
             write += 2
-        self._command(0x2A); self._data([0, 0, 0, WIDTH - 1])
-        self._command(0x2B); self._data([0, 0, 1, HEIGHT - 1])
+        self._command(0x2A); self._data([0, 0, ((WIDTH - 1) >> 8) & 0xFF, (WIDTH - 1) & 0xFF])
+        self._command(0x2B); self._data([0, 0, ((HEIGHT - 1) >> 8) & 0xFF, (HEIGHT - 1) & 0xFF])
         self._command(0x2C); self._data(frame)
+
+    def fill(self, color: tuple[int, int, int]) -> None:
+        """Fill screen immediately with a solid RGB color (e.g. for testing/diagnostics)."""
+        img = Image.new("RGB", (WIDTH, HEIGHT), color)
+        self._present(img)
 
     def _loop(self) -> None:
         interval = 1.0 / self._fps
         while self._running:
             started = time.monotonic()
-            with self._lock:
-                if self._overlay_deadline and started >= self._overlay_deadline:
-                    self._overlay, self._overlay_deadline = None, 0.0
-                state, overlay = self._state, self._overlay
-            self._present(self._draw_face(state, overlay, started - self._started_at))
+            try:
+                with self._lock:
+                    if self._overlay_deadline and started >= self._overlay_deadline:
+                        self._overlay, self._overlay_deadline = None, 0.0
+                    state, overlay = self._state, self._overlay
+                self._present(self._draw_face(state, overlay, started - self._started_at))
+            except Exception as exc:
+                logger.exception("Error in ST7789V display rendering loop: %s", exc)
             time.sleep(max(0.0, interval - (time.monotonic() - started)))
 
     def _draw_face(self, state: str, overlay: Optional[str], elapsed: float) -> Image.Image:
