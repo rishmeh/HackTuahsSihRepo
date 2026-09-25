@@ -47,6 +47,8 @@ def _resolve_laptop_url() -> str:
     startup avoids repeated mDNS RTTs and surfaces DNS failures early.
     """
     fallback = _LAPTOP_URL_DEFAULT
+    if not fallback.startswith(("http://", "https://")):
+        fallback = f"http://{fallback}"
     try:
         ip = socket.getaddrinfo(_MDNS_LAPTOP_HOST, 8000, proto=socket.IPPROTO_TCP)[0][4][0]
         url = f"http://{ip}:8000"
@@ -117,6 +119,8 @@ class PeripheralDaemon:
         # Prefer mDNS resolution at startup; fall back to the supplied URL.
         self.laptop_url = _resolve_laptop_url() if laptop_url == _LAPTOP_URL_DEFAULT \
             else laptop_url.rstrip("/")
+        if not self.laptop_url.startswith(("http://", "https://")):
+            self.laptop_url = f"http://{self.laptop_url}"
         self.camera_index = camera_index
         self.camera_type = camera_type
         self._running = False

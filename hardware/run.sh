@@ -23,6 +23,9 @@ fi
 # LAPTOP_URL defaults to mDNS (tabletot-laptop.local:8000).
 # Only set it explicitly if mDNS doesn't work on your network.
 LAPTOP_URL="${LAPTOP_URL:-http://tabletot-laptop.local:8000}"
+if [[ "$LAPTOP_URL" != http://* && "$LAPTOP_URL" != https://* ]]; then
+    LAPTOP_URL="http://$LAPTOP_URL"
+fi
 
 echo "Brain (laptop): $LAPTOP_URL"
 echo "Camera type:    ${CAMERA_TYPE:-usb}"
