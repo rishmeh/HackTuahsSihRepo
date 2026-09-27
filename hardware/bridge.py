@@ -74,18 +74,7 @@ def _try_import_servo():
         logger.info("ServoController unavailable (no GPIO?): %s", exc)
         return None
 
-
-def _try_import_camera():
-    try:
-        from hardware.camera import CameraCapture  # noqa: F401
-        return CameraCapture
-    except Exception as exc:
-        logger.info("CameraCapture unavailable: %s", exc)
-        return None
-
-
 _ServoController = _try_import_servo()
-_CameraCapture = _try_import_camera()
 
 
 class _NullServos:
@@ -109,8 +98,6 @@ class PeripheralDaemon:
         laptop_url: str = _LAPTOP_URL_DEFAULT,
         head_pin: int = 12,
         body_pin: int = 13,
-        camera_index: int = 0,
-        camera_type: str = "usb",
         display_driver: str = "hdmi",
         display_width: int = 800,
         display_height: int = 480,
@@ -121,8 +108,6 @@ class PeripheralDaemon:
             else laptop_url.rstrip("/")
         if not self.laptop_url.startswith(("http://", "https://")):
             self.laptop_url = f"http://{self.laptop_url}"
-        self.camera_index = camera_index
-        self.camera_type = camera_type
         self._running = False
         self._current_servo_state = "idle"
         self._current_face_state = "idle"
@@ -170,12 +155,7 @@ class PeripheralDaemon:
         else:
             raise ValueError("DISPLAY_DRIVER must be hdmi or st7789v")
 
-        # ------------------------------------------------------------------
-        # Camera — optional
-        # ------------------------------------------------------------------
-        self.camera = None
         self._poll_thread: Optional[threading.Thread] = None
-        self._camera_thread: Optional[threading.Thread] = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -183,9 +163,8 @@ class PeripheralDaemon:
 
     def start(self) -> None:
         logger.info(
-            "Starting Pi bridge; laptop=%s camera=%s display=%s",
+            "Starting Pi bridge; laptop=%s display=%s",
             self.laptop_url,
-            self.camera_type,
             "hdmi(pygame)" if self._uses_pygame else "st7789v(spi)",
         )
         self._running = True
@@ -201,34 +180,18 @@ class PeripheralDaemon:
             self.display.start()
         self.display.set_state("idle")
 
-        # Camera is optional
-        if self.camera_type != "off":
-            self._start_camera()
-        else:
-            logger.info("Camera disabled (CAMERA_TYPE=off)")
-
         self._poll_thread = threading.Thread(
             target=self._poll_loop, daemon=True, name="tabletot-poll"
         )
         self._poll_thread.start()
-
-        if self.camera is not None:
-            self._camera_thread = threading.Thread(
-                target=self._camera_loop, daemon=True, name="tabletot-camera"
-            )
-            self._camera_thread.start()
 
     def stop(self) -> None:
         logger.info("Stopping Pi bridge")
         self._running = False
         if self._poll_thread:
             self._poll_thread.join(timeout=3.0)
-        if self._camera_thread:
-            self._camera_thread.join(timeout=3.0)
         self.servos.cleanup()
         self.display.stop()   # pygame.quit() or SPI teardown — safe from main thread
-        if self.camera is not None:
-            self.camera.release()
         self.http.close()
 
     # ------------------------------------------------------------------
@@ -241,19 +204,7 @@ class PeripheralDaemon:
         except Exception:
             return False
 
-    def _start_camera(self) -> None:
-        if _CameraCapture is None:
-            logger.warning("CameraCapture module not importable — camera disabled")
-            return
-        try:
-            self.camera = _CameraCapture(
-                camera_type=self.camera_type,
-                index=self.camera_index,
-            )
-            logger.info("Camera started (%s)", self.camera.kind)
-        except Exception as exc:
-            logger.warning("Camera disabled: %s", exc)
-            self.camera = None
+
 
     # ------------------------------------------------------------------
     # Poll loop — laptop → Pi (face & servo commands)
@@ -276,103 +227,12 @@ class PeripheralDaemon:
                 self._poll_failures += 1
                 if self._poll_failures == 12:  # ~3 seconds of silence
                     logger.warning("Laptop link lost; returning to idle")
-                    self.servos.idle()
+                    self.servos.start_ambient()
                     self.display.set_state("idle")
                     self._current_servo_state = "idle"
                     self._current_face_state = "idle"
                 logger.debug("State poll failed: %s", exc)
             time.sleep(POLL_INTERVAL)
-
-    # ------------------------------------------------------------------
-    # Camera loop — Pi → laptop (JPEG frames for face recognition)
-    # ------------------------------------------------------------------
-
-    def _camera_loop(self) -> None:
-        """Send one compressed JPEG approximately every 500 ms."""
-        if self.camera is None:
-            return
-        while self._running:
-            try:
-                import cv2
-                ok, frame = self.camera.read()
-                if not ok or frame is None:
-                    time.sleep(0.5)
-                    continue
-                encoded, buffer = cv2.imencode(
-                    ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70]
-                )
-                if encoded:
-                    self._send_frame(buffer.tobytes())
-            except Exception as exc:
-                logger.warning("Camera stream error: %s", exc)
-            time.sleep(FRAME_INTERVAL)
-
-    def _send_frame(self, jpeg: bytes) -> None:
-        try:
-            response = self.http.post(
-                "/hardware/process-frame",
-                files={"image": ("frame.jpg", jpeg, "image/jpeg")},
-                timeout=5.0,
-            )
-            if response.status_code != 200:
-                logger.warning(
-                    "Laptop rejected frame: HTTP %s", response.status_code
-                )
-                return
-            result = response.json()
-            self._student_id = result.get("student_id")
-
-            face_count = result.get("face_count", 0)
-
-            # --- Ambient idle management ---
-            # If no face is visible, count consecutive no-face frames and start
-            # the ambient sway animation after the threshold is reached.
-            # As soon as a face appears again, stop ambient and resume tracking.
-            if face_count == 0:
-                self._no_face_frames += 1
-                if (
-                    self._no_face_frames >= self._AMBIENT_THRESHOLD
-                    and not self._ambient_running
-                ):
-                    try:
-                        self.servos.start_ambient()
-                        self._ambient_running = True
-                        logger.info("No face for %d frames — starting ambient idle",
-                                    self._no_face_frames)
-                    except Exception as exc:
-                        logger.debug("Ambient start error: %s", exc)
-            else:
-                if self._ambient_running:
-                    try:
-                        self.servos.stop_ambient()
-                        logger.info("Face detected — stopping ambient idle")
-                    except Exception as exc:
-                        logger.debug("Ambient stop error: %s", exc)
-                self._no_face_frames = 0
-                self._ambient_running = False
-
-            # --- Head tracking: apply pan/tilt immediately from frame response ---
-            # This is the fast path; it skips the 250 ms poll cycle.
-            # Only track when a face is visible — let ambient handle no-face.
-            if TRACKING_MODE and face_count > 0:
-                pan = result.get("pan_deg")
-                tilt = result.get("tilt_deg")
-                if pan is not None and tilt is not None:
-                    try:
-                        self.servos.track(float(pan), float(tilt))
-                        logger.debug("Tracking: pan=%.1f tilt=%.1f", pan, tilt)
-                    except Exception as exc:
-                        logger.debug("Servo track error: %s", exc)
-
-            self._apply_command(result.get("command") or {})
-            if result.get("event") == "arrived":
-                logger.info("Student recognised: %s", self._student_id)
-            elif result.get("event") == "departed":
-                logger.info("Student departed")
-        except httpx.TimeoutException:
-            logger.debug("Frame inference timed out; dropping frame")
-        except Exception as exc:
-            logger.debug("Frame upload failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Apply a laptop command dict to the local peripherals
@@ -421,7 +281,7 @@ class PeripheralDaemon:
             return
 
         actions = {
-            "idle":      self.servos.idle,
+            "idle":      self.servos.start_ambient,
             "listening": self.servos.listen,
             "speaking":  self.servos.speak,
             "happy":     self.servos.happy,

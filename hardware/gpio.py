@@ -269,17 +269,25 @@ class ServoController:
         self._ambient_active = True
 
         def _ambient_loop() -> None:
-            phase = 0.0
-            body_phase = math.pi / 3  # body slightly offset from head
+            import random
+            target_head = 0.0
+            target_body = 0.0
+            with self._lock:
+                current_head = self._head_angle
+                current_body = self._body_angle
+
             while self._ambient_active and not self._closed:
-                # Slow head sweep: ±12° over ~4 s cycle
-                head_angle = 12.0 * math.sin(phase)
-                # Body tilts gently at half amplitude: ±5° over ~6 s cycle
-                body_angle = 5.0 * math.sin(body_phase * 0.7)
-                self._set_head(head_angle)
-                self._set_body(body_angle)
-                phase += 0.05          # step ~0.8°/frame at 50 ms tick
-                body_phase += 0.035
+                # When close to the target, pick a new random target
+                if abs(current_head - target_head) < 1.0 and abs(current_body - target_body) < 1.0:
+                    target_head = random.uniform(-20.0, 20.0)
+                    target_body = random.uniform(-10.0, 10.0)
+                    
+                # Smoothly interpolate towards the target
+                current_head += (target_head - current_head) * 0.05
+                current_body += (target_body - current_body) * 0.05
+                
+                self._set_head(current_head)
+                self._set_body(current_body)
                 time.sleep(0.05)
 
         thread = threading.Thread(target=_ambient_loop, daemon=True, name="tabletot-servo-ambient")

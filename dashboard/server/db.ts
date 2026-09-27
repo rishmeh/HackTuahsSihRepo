@@ -121,14 +121,7 @@ async function ensureSchema(db: ReturnType<typeof drizzle>) {
   await db.run(
     sql.raw(`CREATE INDEX IF NOT EXISTS chatHistory_sid ON chatHistory (sessionId)`)
   );
-  await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS faceLogs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    studentId TEXT,
-    profileId INTEGER,
-    score INTEGER,
-    frameSource TEXT DEFAULT 'pi_camera',
-    createdAt INTEGER NOT NULL
-  )`));
+
   await db.run(sql.raw(`CREATE TABLE IF NOT EXISTS weatherCache (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     location TEXT NOT NULL UNIQUE,

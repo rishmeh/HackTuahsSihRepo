@@ -14,8 +14,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
-# Separate model for vision (multimodal) requests. Must support image inputs.
-OLLAMA_VISION_MODEL: str = os.getenv("OLLAMA_VISION_MODEL", "llava-phi3")
+
 
 # Timeout (seconds) for standard (non-thinking) Ollama requests
 OLLAMA_TIMEOUT: float = float(os.getenv("OLLAMA_TIMEOUT", "60"))
@@ -78,8 +77,3 @@ FALLBACK_RESPONSE: str = (
     "Please ask your teacher or try rephrasing your question!"
 )
 
-# ---------------------------------------------------------------------------
-# Vision — face detection and recognition
-# ---------------------------------------------------------------------------
-# Face settings live in the vision package's own config (vision/config.py),
-# which sits outside ml/ so the package can run standalone on the robot.

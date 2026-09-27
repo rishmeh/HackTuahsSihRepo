@@ -108,14 +108,6 @@ export const chatHistory = sqliteTable("chatHistory", {
   createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 });
 
-export const faceLogs = sqliteTable("faceLogs", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  studentId: text("studentId"),
-  profileId: integer("profileId"),
-  score: integer("score"),
-  frameSource: text("frameSource").default("pi_camera"),
-  createdAt: integer("createdAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
-});
 
 export const weatherCache = sqliteTable("weatherCache", {
   id: integer("id").primaryKey({ autoIncrement: true }),

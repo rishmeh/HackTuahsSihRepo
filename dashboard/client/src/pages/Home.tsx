@@ -18,7 +18,7 @@ import { QuizzesWidget } from "@/components/widgets/QuizzesWidget";
 import { TimerWidget } from "@/components/widgets/TimerWidget";
 import { VoiceButton } from "@/components/widgets/VoiceButton";
 import { WeatherWidget } from "@/components/widgets/WeatherWidget";
-import { WebcamWidget } from "@/components/widgets/WebcamWidget";
+
 import { FocusWeekCard, QuizScoresCard, RecentActivityCard } from "@/components/ParentProgress";
 import { LiveNowCard, ParentalControlsCard, StudentLimitsNote } from "@/components/ParentControls";
 
@@ -263,7 +263,7 @@ function WidgetDock({ profileId }: { profileId: number }) {
         <TimerWidget />
         <AlarmWidget />
         <NotesWidget />
-        <WebcamWidget />
+
         <QuizzesWidget />
         <FlashcardsWidget />
       </div>

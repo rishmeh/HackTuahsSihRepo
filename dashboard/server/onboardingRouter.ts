@@ -8,9 +8,8 @@
  * this router returns only `{ ok, answered }`. A student cannot see how they
  * were scored because the data never leaves the server.
  *
- * The dashboard profile id is the student id on the Python side, so the face
- * embeddings (vision/), the learner profile (learner/) and this app all key
- * on the same number.
+ * The dashboard profile id is the student id on the Python side, so the learner
+ * profile (learner/) and this app all key on the same number.
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";

@@ -12,7 +12,6 @@ requires-python = ">=3.10"
 # dragging in the chat stack (torch, transformers, spaCy). The full pin list for
 # the ml service lives in ml/requirements.txt.
 dependencies = [
-    "opencv-contrib-python>=4.8",
     "numpy>=1.24",
     "pydantic>=2.0",
     "python-dotenv>=1.0",
@@ -21,20 +20,18 @@ dependencies = [
 [project.optional-dependencies]
 # Needed only when serving the HTTP endpoints (vision/routes.py)
 api = ["fastapi>=0.100", "python-multipart>=0.0.6"]
-test = ["pytest>=7.0", "scikit-image>=0.20", "httpx>=0.24"]
+test = ["pytest>=7.0", "httpx>=0.24"]
 
 [project.scripts]
-# So "tabletot-vision watch" works from anywhere, without -m or a cd.
-tabletot-vision = "vision.camera:main"
 
 [tool.setuptools]
 # Explicit, because auto-discovery would otherwise try to package ml/ as well.
 # Each package is self-contained (own config.py) and mounted into ml/main.py.
-packages = ["vision", "learner", "persona"]
+packages = ["learner", "persona"]
 
 [tool.pytest.ini_options]
 # Lets tests run from the repository root or from inside vision/.
-testpaths = ["vision/tests", "learner/tests", "persona/tests", "ml/tests"]
+testpaths = ["learner/tests", "persona/tests", "ml/tests"]
 
 [tool.setuptools.package-data]
 # The questionnaire ships with the package, not just the source tree.

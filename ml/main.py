@@ -16,8 +16,6 @@ import logging
 import os
 import queue
 import sys
-import cv2
-import numpy as np
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -31,7 +29,6 @@ from chat.sanitizer import sanitize
 from chat.complexity_judge import evaluate_pre_slm
 from chat.safety_filter import apply_safety_filter
 from chat.session_store import clear_session, get_history_from_db, history_as_messages
-from chat.vision_client import call_slm_vision
 from flashcards.generator import generate_and_format_deck
 from flashcards.models import FlashcardRequest
 from quiz.generator import generate_and_format_quiz
@@ -44,11 +41,6 @@ from quiz.models import QuizRequest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from learner.routes import router as learner_router  # noqa: E402
-from vision.routes import router as vision_router  # noqa: E402
-from vision.pipeline import VisionPipeline  # noqa: E402
-from vision.factory import build_pipeline  # noqa: E402
-from vision import config as vision_config  # noqa: E402
-from robot_state import RobotState  # noqa: E402
 
 from alarms.routes import router as alarms_router
 from alarms.scheduler import start_scheduler
@@ -78,7 +70,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(vision_router)
 app.include_router(learner_router)
 app.include_router(alarms_router)
 app.include_router(weather_router)
@@ -130,7 +121,6 @@ async def health():
     return {
         "status": "ok",
         "model": config.OLLAMA_MODEL,
-        "vision_model": config.OLLAMA_VISION_MODEL,
     }
 
 
@@ -241,40 +231,6 @@ async def clear_chat_session(session_id: str):
     return {"cleared": session_id}
 
 
-@app.post("/chat/vision", response_model=ChatResponse, tags=["Chat"])
-async def chat_vision(
-    query: Annotated[str, Form(min_length=1, max_length=2000)],
-    student: Annotated[str, Form()],
-    images: Annotated[list[UploadFile], File()],
-    session_id: Annotated[Optional[str], Form()] = None,
-):
-    try:
-        sp = StudentProfile(**json.loads(student))
-    except Exception as e:
-        raise HTTPException(422, f"Invalid student JSON: {e}")
-    if len(images) > 3:
-        raise HTTPException(422, "Max 3 images")
-    image_bytes = []
-    for up in images:
-        if not (up.content_type or "").startswith("image/"):
-            raise HTTPException(422, f"Not an image: {up.filename}")
-        image_bytes.append(await up.read())
-    san = sanitize(query.strip())
-    block, _, _ = evaluate_pre_slm(san.sanitized_text)
-    if block:
-        return ChatResponse(answer=config.FALLBACK_RESPONSE, source="fallback", session_id=session_id)
-    history = history_as_messages(session_id) if session_id else []
-    resp = await call_slm_vision(san.sanitized_text, image_bytes, sp, history)
-    if resp is None:
-        return ChatResponse(answer=config.FALLBACK_RESPONSE, source="fallback", session_id=session_id)
-    fr = apply_safety_filter(resp.answer)
-    return ChatResponse(
-        answer=fr.text if fr.is_safe else config.FALLBACK_RESPONSE,
-        source="slm_vision",
-        session_id=session_id,
-    )
-
-
 # ---------------------------------------------------------------------------
 # Quiz & Flashcards
 # ---------------------------------------------------------------------------
@@ -300,181 +256,29 @@ async def flashcards(request: FlashcardRequest):
 # ---------------------------------------------------------------------------
 # Hardware Control API (for Pi peripheral daemon)
 # ---------------------------------------------------------------------------
-# These endpoints let the Pi act as a pure hardware driver: it captures camera
-# frames, drives two servos, and streams frames here for face processing.
-# All computation stays on this machine (the laptop).
+import threading
 
-# Shared vision pipeline (loaded once, reused per frame)
-_pipeline: Optional[VisionPipeline] = None
-_robot_state = RobotState(
-    confirm_frames=vision_config.FACE_CONFIRM_FRAMES,
-    forget_frames=vision_config.FACE_FORGET_FRAMES,
-)
-_robot_events: queue.Queue[dict] = queue.Queue(maxsize=8)
-
-
-def _put_latest(target: queue.Queue, item) -> None:
-    """Bound latency by discarding the oldest item when a queue is full."""
-    try:
-        target.put_nowait(item)
-    except queue.Full:
-        try:
-            target.get_nowait()
-        except queue.Empty:
-            pass
-        target.put_nowait(item)
-
-
-def _get_pipeline() -> VisionPipeline:
-    """Lazily load the vision pipeline once."""
-    global _pipeline
-    if _pipeline is None:
-        try:
-            _pipeline = build_pipeline()
-            logger.info("Vision pipeline loaded for hardware stream")
-        except Exception as exc:
-            logger.error("Failed to build vision pipeline: %s", exc)
-            raise HTTPException(status_code=503, detail="Vision pipeline not available")
-    return _pipeline
-
-
-_latest_frame_jpeg: bytes = b""
-
-@app.post("/hardware/process-frame")
-async def hardware_process_frame(
-    image: Annotated[UploadFile, File(description="JPEG frame from Pi camera")],
-) -> dict:
-    """
-    Pi streams a camera frame here → laptop runs face detection + recognition.
-    Returns the identified student_id (or null) + face metadata + pan/tilt
-    servo angles so the Pi can point its head at the detected face.
-    """
-    from vision.head_tracker import face_to_servo_angles, no_face_angles
-    global _latest_frame_jpeg
-
-    raw_bytes = await image.read()
-    _latest_frame_jpeg = raw_bytes
-
-    buffer = np.frombuffer(raw_bytes, dtype=np.uint8)
-    frame = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
-    if frame is None:
-        raise HTTPException(status_code=400, detail="Could not decode image")
-
-    try:
-        result = _get_pipeline().identify(frame)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Vision processing error: %s", exc)
-        raise HTTPException(status_code=500, detail="Vision processing failed")
-
-    faces = []
-    if result.face:
-        faces.append({
-            "x": result.face.x,
-            "y": result.face.y,
-            "width": result.face.width,
-            "height": result.face.height,
-            "score": result.face.score,
-        })
-
-    # Compute pan/tilt angles from face position so the Pi can track the head.
-    # pan  > 0 → face is right of centre → servo turns right
-    # tilt > 0 → face is above centre   → servo tilts up
-    frame_h, frame_w = frame.shape[:2]
-    if result.face is not None:
-        pan_deg, tilt_deg = face_to_servo_angles(
-            result.face, frame_width=frame_w, frame_height=frame_h
-        )
-    else:
-        pan_deg, tilt_deg = no_face_angles()
-
-    command = _robot_state.observe_face(
-        student_id=result.student_id,
-        face_count=result.face_count,
-        score=result.score,
-    )
-    event = command.pop("event")
-    if event:
-        _put_latest(
-            _robot_events,
-            {"event": event, "student_id": command.get("student_id")},
-        )
-    return {
-        "face_count": result.face_count,
-        "student_id": result.student_id,
-        "score": round(result.score, 4),
-        "faces": faces,
-        "pan_deg": pan_deg,
-        "tilt_deg": tilt_deg,
-        "event": event,
-        "command": command,
-    }
-
-
-@app.post("/hardware/greet")
-async def hardware_greet(request: Request) -> dict:
-    """Create a short greeting using the recognized student's laptop profile."""
-    body = await request.json()
-    student_id = str(body.get("student_id", "")).strip()
-    if not student_id:
-        raise HTTPException(status_code=400, detail="Missing 'student_id' field")
-    stored = get_learner_store().get(student_id)
-    age = stored.profile.age if stored is not None else 10
-    chat_request = ChatRequest(
-        query="Greet the recognized student warmly and ask whether they want to start studying. Use one short sentence.",
-        student=StudentProfile(age=age),
-        student_id=student_id,
-        session_id=f"robot-{student_id}",
-        situation="greeting",
-    )
-    response = await run_chat_pipeline(chat_request)
-    return {"answer": response.answer, "student_id": student_id}
-
-
-@app.get("/hardware/events")
-async def hardware_event_next():
-    """Return the next recognition event to the laptop voice worker."""
-    try:
-        return _robot_events.get_nowait()
-    except queue.Empty:
-        return Response(status_code=204)
-
-
-async def mjpeg_generator():
-    import asyncio
-    global _latest_frame_jpeg
-    while True:
-        if _latest_frame_jpeg:
-            yield (
-                b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" + _latest_frame_jpeg + b"\r\n"
-            )
-        await asyncio.sleep(0.1)
-
-@app.get("/hardware/stream")
-async def hardware_stream():
-    """MJPEG stream of the latest frames received from the Pi."""
-    return StreamingResponse(mjpeg_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
-
+_robot_state = {
+    "face_state": "idle",
+    "servo_state": "idle",
+    "overlay_text": None,
+    "overlay_duration": None,
+    "revision": 0
+}
+_robot_telemetry = {}
+_state_lock = threading.Lock()
 
 @app.get("/hardware/state")
 async def hardware_get_state() -> dict:
-    """
-    Pi polls this periodically to get current face/servo state.
-    Returns the servo state the laptop wants the Pi to apply right now.
-    """
-    return _robot_state.command()
+    with _state_lock:
+        return dict(_robot_state)
 
 
 @app.post("/hardware/state/set")
 async def hardware_set_state(request: Request) -> dict:
-    """
-    Pi reports its current state (optional — for debugging/monitoring).
-    Also endpoint the brain can push state to (alternative to polling).
-    """
     body = await request.json()
-    _robot_state.update_telemetry(body)
+    with _state_lock:
+        _robot_telemetry.update(body)
     logger.info(
         "Hardware state | face=%s | servo=%s | student=%s",
         body.get("face_state"),
@@ -486,23 +290,24 @@ async def hardware_set_state(request: Request) -> dict:
 
 @app.get("/hardware/status")
 async def hardware_status() -> dict:
-    """Return laptop commands and the most recent Pi telemetry."""
-    return _robot_state.status()
+    with _state_lock:
+        return {"command": dict(_robot_state), "telemetry": dict(_robot_telemetry)}
 
 
 @app.post("/hardware/control")
 async def hardware_control(request: Request) -> dict:
-    """Issue an explicit robot-state/servo command from the laptop."""
     body = await request.json()
-    try:
-        return _robot_state.control(
-            face_state=body.get("face_state"),
-            servo_state=body.get("servo_state"),
-            overlay_text=body.get("overlay_text"),
-            overlay_duration=body.get("overlay_duration"),
-        )
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    with _state_lock:
+        if "face_state" in body:
+            _robot_state["face_state"] = body["face_state"]
+        if "servo_state" in body:
+            _robot_state["servo_state"] = body["servo_state"]
+        if "overlay_text" in body:
+            _robot_state["overlay_text"] = body["overlay_text"]
+        if "overlay_duration" in body:
+            _robot_state["overlay_duration"] = body["overlay_duration"]
+        _robot_state["revision"] += 1
+        return dict(_robot_state)
 
 
 if __name__ == "__main__":
