@@ -23,7 +23,7 @@ from typing import Annotated, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from chat.models import ChatRequest, ChatResponse, StudentProfile
 from chat.pipeline import run_chat_pipeline
@@ -338,6 +338,8 @@ def _get_pipeline() -> VisionPipeline:
     return _pipeline
 
 
+_latest_frame_jpeg: bytes = b""
+
 @app.post("/hardware/process-frame")
 async def hardware_process_frame(
     image: Annotated[UploadFile, File(description="JPEG frame from Pi camera")],
@@ -348,8 +350,12 @@ async def hardware_process_frame(
     servo angles so the Pi can point its head at the detected face.
     """
     from vision.head_tracker import face_to_servo_angles, no_face_angles
+    global _latest_frame_jpeg
 
-    buffer = np.frombuffer(await image.read(), dtype=np.uint8)
+    raw_bytes = await image.read()
+    _latest_frame_jpeg = raw_bytes
+
+    buffer = np.frombuffer(raw_bytes, dtype=np.uint8)
     frame = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
     if frame is None:
         raise HTTPException(status_code=400, detail="Could not decode image")
@@ -433,6 +439,23 @@ async def hardware_event_next():
         return _robot_events.get_nowait()
     except queue.Empty:
         return Response(status_code=204)
+
+
+async def mjpeg_generator():
+    import asyncio
+    global _latest_frame_jpeg
+    while True:
+        if _latest_frame_jpeg:
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" + _latest_frame_jpeg + b"\r\n"
+            )
+        await asyncio.sleep(0.1)
+
+@app.get("/hardware/stream")
+async def hardware_stream():
+    """MJPEG stream of the latest frames received from the Pi."""
+    return StreamingResponse(mjpeg_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
 @app.get("/hardware/state")

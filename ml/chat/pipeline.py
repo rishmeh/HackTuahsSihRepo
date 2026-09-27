@@ -49,6 +49,7 @@ from learner.profile_store import ProfileStore
 from persona.decorate import decorate_answer
 from persona.phrases import PhraseBook, Situation
 from persona.prompt import build_persona_block, compose_system_prompt
+from notes.note_store import find_relevant_notes
 
 logger = logging.getLogger(__name__)
 
@@ -148,13 +149,40 @@ async def run_chat_pipeline(request: ChatRequest) -> ChatResponse:
     # ------------------------------------------------------------------
     block_escalation, force_escalation, escalation_reason = evaluate_pre_slm(sanitized_query)
 
+    # ------------------------------------------------------------------
+    # Step 3b: Note context retrieval
+    # Look up the student's indexed notes and inject relevant content
+    # into the query so the SLM reasons from the student's own material.
+    # Non-blocking — if it fails we fall through to a pure SLM answer.
+    # ------------------------------------------------------------------
+    profile_id = 0
+    if request.student_id:
+        try:
+            profile_id = int(request.student_id)
+        except (ValueError, TypeError):
+            profile_id = 0
+
+    note_context = await find_relevant_notes(sanitized_query, profile_id)
+
+    # Prepend the notes block to the user turn (not the system prompt) so the
+    # system prompt stays stable and cacheable across requests.
+    augmented_query = sanitized_query
+    if note_context.found:
+        note_block = note_context.as_prompt_block()
+        augmented_query = f"{note_block}\n\nStudent question: {sanitized_query}"
+        logger.info(
+            "Note context injected | keywords=%s | notes=%d",
+            note_context.matched_keywords,
+            len(note_context.note_snippets),
+        )
+
     slm_response = None
     if not force_escalation:
         # ------------------------------------------------------------------
         # Step 4: Call local SLM — fast path (think=False)
         # ------------------------------------------------------------------
         slm_response = await call_slm(
-            sanitized_query, request.student, history,
+            augmented_query, request.student, history,
             think=False, system_prompt=persona.system_prompt,
         )
 
@@ -183,6 +211,8 @@ async def run_chat_pipeline(request: ChatRequest) -> ChatResponse:
         filter_result = apply_safety_filter(persona.apply(slm_response.answer))
         if filter_result.is_safe:
             if request.session_id:
+                # Store the original (un-augmented) query so future turns
+                # don't re-inject the notes block as conversation history.
                 append_turn(request.session_id, sanitized_query, filter_result.text)
             return ChatResponse(
                 answer=filter_result.text,
@@ -213,11 +243,12 @@ async def run_chat_pipeline(request: ChatRequest) -> ChatResponse:
     )
 
     return await _escalate_via_thinking(
-        sanitized_query, request, history, escalation_reason, slm_response, persona
+        augmented_query, sanitized_query, request, history, escalation_reason, slm_response, persona
     )
 
 
 async def _escalate_via_thinking(
+    augmented_query: str,
     sanitized_query: str,
     request: ChatRequest,
     history: list[dict[str, str]],
@@ -227,7 +258,7 @@ async def _escalate_via_thinking(
 ) -> ChatResponse:
     """Retry the local SLM with think=True for a higher-quality answer."""
     thinking_response = await call_slm(
-        sanitized_query, request.student, history,
+        augmented_query, request.student, history,
         think=True, system_prompt=persona.system_prompt,
     )
 
@@ -250,6 +281,7 @@ async def _escalate_via_thinking(
     filter_result = apply_safety_filter(persona.apply(thinking_response.answer))
     if filter_result.is_safe:
         if request.session_id:
+            # Store original query (not augmented) in history
             append_turn(request.session_id, sanitized_query, filter_result.text)
         return ChatResponse(
             answer=filter_result.text,

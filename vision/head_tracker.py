@@ -32,6 +32,90 @@ _PI_CAM_V2_H_FOV = 62.2
 _PI_CAM_V2_V_FOV = 48.8
 
 
+class HeadTracker:
+    """
+    Stateful, smoothed head-tracker.
+
+    Applies an Exponential Moving Average (EMA) to the raw pan/tilt angles
+    computed from each frame so that the servo glides to its target rather
+    than snapping there instantly.  When no face is detected the tracker
+    holds (and continues to decay toward) the last known position — it does
+    NOT snap back to 0°, which is the primary cause of visible jitter.
+
+    Parameters
+    ----------
+    alpha_face   EMA weight for frames WITH a face (0 < α ≤ 1).
+                 Higher = faster response, more jitter. Lower = smoother,
+                 more lag.  0.25 feels snappy but not twitchy.
+    alpha_nf     EMA weight for frames WITHOUT a face (very small so the
+                 head drifts gently back toward centre rather than jumping).
+    dead_zone    Face offset in degrees below which the servo is not moved
+                 (prevents micro-corrections from sensor noise).
+    """
+
+    def __init__(
+        self,
+        alpha_face: float = 0.25,
+        alpha_nf: float = 0.04,
+        dead_zone: float = 1.5,
+    ) -> None:
+        self._alpha_face = alpha_face
+        self._alpha_nf = alpha_nf
+        self._dead_zone = dead_zone
+        self._pan: float = 0.0
+        self._tilt: float = 0.0
+
+    def update_with_face(
+        self,
+        face: FaceBox,
+        frame_width: int,
+        frame_height: int,
+        h_fov_deg: float = _PI_CAM_V2_H_FOV,
+        v_fov_deg: float = _PI_CAM_V2_V_FOV,
+        pan_limit: float = 45.0,
+        tilt_limit: float = 45.0,
+    ) -> tuple[float, float]:
+        """Compute new EMA-smoothed angles from a detected face."""
+        face_cx = face.x + face.width / 2.0
+        face_cy = face.y + face.height / 2.0
+
+        norm_x = (face_cx - frame_width / 2.0) / frame_width
+        norm_y = (face_cy - frame_height / 2.0) / frame_height
+
+        raw_pan  =  norm_x * h_fov_deg
+        raw_tilt = -norm_y * v_fov_deg  # flip: pixel-y down → servo-tilt up
+
+        raw_pan  = max(-pan_limit,  min(pan_limit,  raw_pan))
+        raw_tilt = max(-tilt_limit, min(tilt_limit, raw_tilt))
+
+        # Dead-zone: skip tiny corrections that just cause chatter
+        if abs(raw_pan  - self._pan)  > self._dead_zone:
+            self._pan  = self._pan  + self._alpha_face * (raw_pan  - self._pan)
+        if abs(raw_tilt - self._tilt) > self._dead_zone:
+            self._tilt = self._tilt + self._alpha_face * (raw_tilt - self._tilt)
+
+        return round(self._pan, 2), round(self._tilt, 2)
+
+    def update_no_face(self) -> tuple[float, float]:
+        """
+        Gently decay toward centre when no face is visible.
+
+        This replaces the hard snap to (0, 0) that caused violent jitter on
+        every missed or flickering detection frame.
+        """
+        self._pan  = self._pan  * (1.0 - self._alpha_nf)
+        self._tilt = self._tilt * (1.0 - self._alpha_nf)
+        return round(self._pan, 2), round(self._tilt, 2)
+
+    @property
+    def current(self) -> tuple[float, float]:
+        return round(self._pan, 2), round(self._tilt, 2)
+
+
+# Module-level singleton used by the FastAPI endpoint.
+_tracker = HeadTracker()
+
+
 def face_to_servo_angles(
     face: FaceBox,
     frame_width: int,
@@ -44,6 +128,9 @@ def face_to_servo_angles(
     """
     Map a detected face position to pan/tilt servo angles (degrees).
 
+    Delegates through the module-level HeadTracker singleton so that
+    successive calls are smoothed with EMA rather than jumping to raw values.
+
     Args:
         face:         Detected face bounding box from YuNet.
         frame_width:  Width of the camera frame in pixels.
@@ -54,30 +141,26 @@ def face_to_servo_angles(
         tilt_limit:   Maximum tilt angle in either direction (degrees).
 
     Returns:
-        (pan_deg, tilt_deg) — both clamped to ±limit.
+        (pan_deg, tilt_deg) — EMA-smoothed, clamped to ±limit.
         Positive pan  → face is right of centre → turn right.
         Positive tilt → face is above centre   → tilt up.
     """
-    # Face centre in pixel space
-    face_cx = face.x + face.width / 2.0
-    face_cy = face.y + face.height / 2.0
-
-    # Normalised offset from frame centre: range [-0.5, 0.5]
-    norm_x = (face_cx - frame_width / 2.0) / frame_width
-    norm_y = (face_cy - frame_height / 2.0) / frame_height
-
-    # Convert normalised offset to degrees
-    pan_deg = norm_x * h_fov_deg
-    # y increases downward in pixel space; flip so tilt > 0 means "up"
-    tilt_deg = -norm_y * v_fov_deg
-
-    # Clamp to servo mechanical limits
-    pan_deg = max(-pan_limit, min(pan_limit, pan_deg))
-    tilt_deg = max(-tilt_limit, min(tilt_limit, tilt_deg))
-
-    return round(pan_deg, 2), round(tilt_deg, 2)
+    return _tracker.update_with_face(
+        face,
+        frame_width=frame_width,
+        frame_height=frame_height,
+        h_fov_deg=h_fov_deg,
+        v_fov_deg=v_fov_deg,
+        pan_limit=pan_limit,
+        tilt_limit=tilt_limit,
+    )
 
 
 def no_face_angles() -> tuple[float, float]:
-    """Return neutral (centre) angles when no face is detected."""
-    return 0.0, 0.0
+    """
+    Return smoothly decayed angles when no face is detected.
+
+    Instead of snapping to (0, 0) this gently drifts the head back toward
+    centre so there is no visible jolt when detection flickers.
+    """
+    return _tracker.update_no_face()

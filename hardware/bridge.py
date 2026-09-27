@@ -130,6 +130,12 @@ class PeripheralDaemon:
         self._last_revision = -1
         self._poll_failures = 0
 
+        # Ambient animation: start after this many consecutive no-face frames.
+        # At FRAME_INTERVAL=0.15 s this is ~3 s of nobody in view.
+        self._no_face_frames = 0
+        self._AMBIENT_THRESHOLD = 20  # frames before ambient kicks in
+        self._ambient_running = False
+
         self.http = httpx.Client(timeout=30.0, base_url=self.laptop_url)
 
         # ------------------------------------------------------------------
@@ -316,9 +322,39 @@ class PeripheralDaemon:
             result = response.json()
             self._student_id = result.get("student_id")
 
+            face_count = result.get("face_count", 0)
+
+            # --- Ambient idle management ---
+            # If no face is visible, count consecutive no-face frames and start
+            # the ambient sway animation after the threshold is reached.
+            # As soon as a face appears again, stop ambient and resume tracking.
+            if face_count == 0:
+                self._no_face_frames += 1
+                if (
+                    self._no_face_frames >= self._AMBIENT_THRESHOLD
+                    and not self._ambient_running
+                ):
+                    try:
+                        self.servos.start_ambient()
+                        self._ambient_running = True
+                        logger.info("No face for %d frames — starting ambient idle",
+                                    self._no_face_frames)
+                    except Exception as exc:
+                        logger.debug("Ambient start error: %s", exc)
+            else:
+                if self._ambient_running:
+                    try:
+                        self.servos.stop_ambient()
+                        logger.info("Face detected — stopping ambient idle")
+                    except Exception as exc:
+                        logger.debug("Ambient stop error: %s", exc)
+                self._no_face_frames = 0
+                self._ambient_running = False
+
             # --- Head tracking: apply pan/tilt immediately from frame response ---
             # This is the fast path; it skips the 250 ms poll cycle.
-            if TRACKING_MODE:
+            # Only track when a face is visible — let ambient handle no-face.
+            if TRACKING_MODE and face_count > 0:
                 pan = result.get("pan_deg")
                 tilt = result.get("tilt_deg")
                 if pan is not None and tilt is not None:
@@ -363,6 +399,15 @@ class PeripheralDaemon:
             logger.info("Face: %s → %s", self._current_face_state, face_state)
             self.display.set_state(face_state)
             self._current_face_state = face_state
+
+        # Any explicit named servo state (thinking, speaking, etc.) should
+        # cancel ambient so the gesture takes priority.
+        if servo_state not in ("idle",) and self._ambient_running:
+            try:
+                self.servos.stop_ambient()
+                self._ambient_running = False
+            except Exception:
+                pass
 
         overlay_text = command.get("overlay_text")
         if overlay_text:

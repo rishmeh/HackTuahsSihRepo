@@ -16,6 +16,7 @@ Run modes:
 import os
 import sys
 import queue
+import threading
 import urllib.request
 import warnings
 import numpy as np
@@ -165,6 +166,13 @@ def speak_text(text: str):
     # Play synchronously (Piper lessac-medium is 22050 Hz)
     sd.play(audio_array, samplerate=22050)
     sd.wait()
+    # Drain any audio captured while TTS was playing so the VAD/STT
+    # doesn't pick up noise or speaker bleed from this utterance.
+    for _ in range(audio_queue.qsize()):
+        try:
+            audio_queue.get_nowait()
+        except Exception:
+            break
     set_robot_state("listening")
 
 # ---------------------------------------------------------
@@ -191,6 +199,7 @@ def main():
     # Continuous mode: skip the wakeword loop entirely
     state = "RECORDING" if _ARGS.mode == "continuous" else "WAKEWORD"
     recorded_frames, silence_frames = [], 0
+    has_speech = False
     max_silence_frames = int(RATE / CHUNK * SILENCE_DURATION)
 
     try:
@@ -227,15 +236,26 @@ def main():
                     state = "RECORDING"
                     recorded_frames = []
                     silence_frames = 0
+                    has_speech = False
                     while not audio_queue.empty():
                         audio_queue.get()
 
             elif state == "RECORDING":
                 rms = np.sqrt(np.mean(chunk.astype(np.float32) ** 2))
                 recorded_frames.append(chunk)
-                silence_frames = 0 if rms >= VAD_THRESHOLD else silence_frames + 1
+                
+                if rms >= VAD_THRESHOLD:
+                    silence_frames = 0
+                    has_speech = True
+                else:
+                    silence_frames += 1
 
                 if silence_frames > max_silence_frames:
+                    if not has_speech:
+                        recorded_frames = []
+                        silence_frames = 0
+                        continue
+
                     print("[Silence detected, processing...]")
                     state = "PROCESSING"
 
@@ -355,6 +375,7 @@ def main():
 
                     recorded_frames = []
                     silence_frames = 0
+                    has_speech = False
 
                     oww_model.reset()
                     while not audio_queue.empty():

@@ -23,6 +23,7 @@ Adjust MIN_PULSE_MS / MAX_PULSE_MS in __init__() to calibrate your servos.
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from typing import Optional
@@ -109,7 +110,25 @@ class ServoController:
     Both servos run at 50 Hz. The PWM signal is generated entirely in
     hardware on the Pi's dedicated PWM timer so there is no CPU-induced
     jitter (unlike gpiozero's software-PWM backend).
+
+    Smooth movement
+    ---------------
+    track() uses a small software interpolation loop (STEPS × step_ms)
+    so the servo glides to the target instead of jumping, which is the
+    second major cause of visible jitter in addition to sensor noise.
+
+    Ambient animation
+    -----------------
+    start_ambient() launches a looping background thread that gently sways
+    the head when no face is present, making the robot feel alive to kids.
+    Call stop_ambient() (or any named gesture / track()) to cancel it.
     """
+
+    # Soft-step parameters for track(): tune these to taste.
+    # TRACK_STEPS × TRACK_STEP_MS sets total slew time per frame.
+    # e.g. 6 steps × 20 ms = 120 ms max slew — invisible lag at ~7 fps.
+    TRACK_STEPS: int = 6
+    TRACK_STEP_MS: float = 20.0  # ms between steps
 
     def __init__(
         self,
@@ -135,6 +154,10 @@ class ServoController:
         self._closed = False
         self._head_angle = 0.0
         self._body_angle = 0.0
+
+        # Ambient idle state
+        self._ambient_active = False
+        self._ambient_thread: Optional[threading.Thread] = None
 
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
@@ -177,68 +200,213 @@ class ServoController:
             self._body_angle = max(self._min_angle, min(self._max_angle, angle))
             self.body.set_angle(self._body_angle)
 
+    # ------------------------------------------------------------------
+    # Internal: run a pose sequence asynchronously
+    # ------------------------------------------------------------------
+
     def _gesture(self, poses: list[tuple[float, float, float]]) -> None:
-        """Run a replaceable, non-blocking list of head/body poses."""
+        """
+        Run a replaceable, non-blocking list of head/body poses.
+
+        Each pose is (head_angle, body_angle, hold_seconds).
+        The servo steps smoothly between consecutive poses using
+        linear interpolation so motion never looks like a hard snap.
+        """
+        self._stop_ambient()
         with self._lock:
             self._gesture_generation += 1
             generation = self._gesture_generation
 
         def run() -> None:
-            for head, body, duration in poses:
-                with self._lock:
-                    if self._closed or generation != self._gesture_generation:
-                        return
-                self._set_head(head)
-                self._set_body(body)
-                time.sleep(duration)
+            # Start from the current actual position so the first move
+            # is also smooth, not a jump.
+            with self._lock:
+                from_head = self._head_angle
+                from_body = self._body_angle
+
+            for (to_head, to_body, hold) in poses:
+                steps = max(1, int(hold / (self.TRACK_STEP_MS / 1000.0)))
+                for step in range(1, steps + 1):
+                    with self._lock:
+                        if self._closed or generation != self._gesture_generation:
+                            return
+                    t = step / steps
+                    # Smooth ease-in-out via cosine
+                    ease = (1.0 - math.cos(t * math.pi)) / 2.0
+                    interp_head = from_head + (to_head - from_head) * ease
+                    interp_body = from_body + (to_body - from_body) * ease
+                    self._set_head(interp_head)
+                    self._set_body(interp_body)
+                    time.sleep(self.TRACK_STEP_MS / 1000.0)
+                from_head = to_head
+                from_body = to_body
 
         thread = threading.Thread(target=run, daemon=True, name="tabletot-servo-gesture")
         self._gesture_thread = thread
         thread.start()
 
-    def idle(self):
-        self._gesture([(0.0, 0.0, 0.1)])
+    # ------------------------------------------------------------------
+    # Ambient idle animation (runs when face is absent for a while)
+    # ------------------------------------------------------------------
 
-    def listen(self):
-        self._gesture([(15.0, 0.0, 0.1)])
+    def _stop_ambient(self) -> None:
+        """Cancel the ambient loop if it is running."""
+        self._ambient_active = False
+        # The ambient thread checks _ambient_active; it will exit on its own.
 
-    def speak(self):
-        self._gesture([(8.0, -4.0, 0.18), (-2.0, 4.0, 0.18), (8.0, -4.0, 0.18)])
+    def start_ambient(self) -> None:
+        """
+        Start a looping, gentle idle sway animation so the robot looks
+        alive when nobody is in front of it.
 
-    def happy(self):
-        # A short nod and body sway is clearly visible when recognition succeeds.
+        The animation is a slow sinusoidal sweep of the head combined with
+        occasional random-ish body tilts, giving the impression of a curious
+        little creature looking around.
+        """
+        if self._ambient_active:
+            return  # Already running
+        self._stop_gesture()
+        self._ambient_active = True
+
+        def _ambient_loop() -> None:
+            phase = 0.0
+            body_phase = math.pi / 3  # body slightly offset from head
+            while self._ambient_active and not self._closed:
+                # Slow head sweep: ±12° over ~4 s cycle
+                head_angle = 12.0 * math.sin(phase)
+                # Body tilts gently at half amplitude: ±5° over ~6 s cycle
+                body_angle = 5.0 * math.sin(body_phase * 0.7)
+                self._set_head(head_angle)
+                self._set_body(body_angle)
+                phase += 0.05          # step ~0.8°/frame at 50 ms tick
+                body_phase += 0.035
+                time.sleep(0.05)
+
+        thread = threading.Thread(target=_ambient_loop, daemon=True, name="tabletot-servo-ambient")
+        self._ambient_thread = thread
+        thread.start()
+        logger.debug("Ambient idle animation started")
+
+    def stop_ambient(self) -> None:
+        """Stop the ambient animation (call before gestures / tracking)."""
+        self._stop_ambient()
+
+    def _stop_gesture(self) -> None:
+        """Bump gesture generation so any running gesture thread exits."""
+        with self._lock:
+            self._gesture_generation += 1
+
+    # ------------------------------------------------------------------
+    # Named gestures — each cancels ambient + previous gesture
+    # ------------------------------------------------------------------
+
+    def idle(self) -> None:
+        """Return smoothly to centre."""
+        self._gesture([(0.0, 0.0, 0.4)])
+
+    def listen(self) -> None:
+        """
+        Lean head slightly toward the speaker and bob once — shows attentiveness.
+        Kids interpret a head-tilt as 'the robot is listening carefully'.
+        """
         self._gesture([
-            (18.0, -15.0, 0.20),
-            (-5.0,  15.0, 0.20),
-            (18.0, -12.0, 0.20),
-            (0.0,    0.0, 0.10),
+            (12.0,  3.0, 0.30),   # tilt toward speaker
+            (10.0,  5.0, 0.25),   # small nod down
+            (14.0,  2.0, 0.25),   # nod up
+            (12.0,  3.0, 0.60),   # hold attentive pose
         ])
 
-    def thinking(self):
-        self._gesture([(-15.0, 7.0, 0.1)])
+    def speak(self) -> None:
+        """
+        Rhythmic head bobs while speaking — matches natural speech cadence.
+        Body sways opposite to head to look energetic and friendly.
+        """
+        self._gesture([
+            ( 8.0, -4.0, 0.20),
+            (-4.0,  5.0, 0.18),
+            (10.0, -5.0, 0.20),
+            (-3.0,  4.0, 0.18),
+            ( 6.0, -3.0, 0.20),
+            ( 0.0,  0.0, 0.15),
+        ])
 
-    def focus(self):
-        self._gesture([(0.0, -5.0, 0.1)])
+    def happy(self) -> None:
+        """
+        An enthusiastic nod and body sway when recognition succeeds.
+        Clearly visible and satisfying for kids.
+        """
+        self._gesture([
+            ( 20.0, -18.0, 0.18),
+            (-10.0,  18.0, 0.18),
+            ( 22.0, -15.0, 0.18),
+            (-8.0,   15.0, 0.18),
+            ( 15.0,  -8.0, 0.18),
+            (  0.0,   0.0, 0.20),
+        ])
+
+    def thinking(self) -> None:
+        """
+        Slow head tilt to one side + gentle body lean — the classic 'hmm'
+        pose.  Runs as a repeating sequence so it feels like the robot is
+        genuinely mulling things over.
+        """
+        self._gesture([
+            (-18.0,  6.0, 0.50),   # tilt left, lean
+            (-20.0,  8.0, 0.40),   # settle deeper
+            (-16.0,  5.0, 0.40),   # small shift
+            (-18.0,  7.0, 0.60),   # hold
+        ])
+
+    def focus(self) -> None:
+        """
+        Square-on, slightly forward lean — robot is concentrating.
+        """
+        self._gesture([
+            ( 0.0, -8.0, 0.35),   # lean forward (body forward = negative tilt here)
+            ( 2.0, -9.0, 0.30),   # tiny tilt right
+            (-1.0, -8.0, 0.30),   # micro correction
+            ( 0.0, -8.0, 0.40),   # hold
+        ])
+
+    # ------------------------------------------------------------------
+    # Continuous face tracking (fast path — no gesture thread)
+    # ------------------------------------------------------------------
 
     def track(self, pan: float, tilt: float) -> None:
         """
-        Move directly to (pan, tilt) angles for continuous face tracking.
+        Move smoothly toward (pan, tilt) angles for continuous face tracking.
 
-        Unlike the named gestures this is NOT asynchronous and does NOT start
-        a gesture thread — it applies the angles immediately and returns.
-        This keeps the servo latency as low as possible during live tracking.
+        Unlike the named gestures this stays on the calling thread but
+        interleaves short PWM steps so motion is visually smooth rather
+        than an instant jump.  Also cancels any running gesture / ambient.
 
         Args:
             pan:  Horizontal angle in degrees.  Positive = right of centre.
             tilt: Vertical angle in degrees.    Positive = above centre.
         """
-        # Bump the gesture generation so any running gesture thread aborts.
+        # Cancel ambient and bump gesture generation so any running gesture exits.
+        self._stop_ambient()
         with self._lock:
             self._gesture_generation += 1
-        self._set_head(pan)
-        self._set_body(tilt)
+            from_head = self._head_angle
+            from_body = self._body_angle
+
+        pan  = max(self._min_angle, min(self._max_angle, pan))
+        tilt = max(self._min_angle, min(self._max_angle, tilt))
+
+        for step in range(1, self.TRACK_STEPS + 1):
+            t = step / self.TRACK_STEPS
+            ease = (1.0 - math.cos(t * math.pi)) / 2.0
+            self._set_head(from_head + (pan  - from_head) * ease)
+            self._set_body(from_body + (tilt - from_body) * ease)
+            time.sleep(self.TRACK_STEP_MS / 1000.0)
+
+    # ------------------------------------------------------------------
+    # Cleanup
+    # ------------------------------------------------------------------
 
     def cleanup(self) -> None:
+        self._stop_ambient()
         with self._lock:
             self._closed = True
             self._gesture_generation += 1

@@ -67,7 +67,7 @@ _NUM_PAT  = rf"(\d+|{_WORD_NUM_PAT})"
 _UNIT_PAT = r"(hour|hr|minute|min|second|sec)s?"
 
 _TIMER = re.compile(
-    rf"(?:set|start|create|put)\s+(?:a\s+)?timer\s+for\s+{_NUM_PAT}\s*{_UNIT_PAT}",
+    rf"(?:set|said|get|start|create|put)\s+(?:a\s+)?timer\s+for\s+{_NUM_PAT}\s*{_UNIT_PAT}",
     re.I,
 )
 _TIMER_ALT = re.compile(
@@ -76,24 +76,25 @@ _TIMER_ALT = re.compile(
 )
 
 _ALARM_DIGIT = re.compile(
-    r"(?:set|create|add|wake\s+me(?:\s+up)?)\s+(?:an?\s+)?alarm\s+(?:at|for)?\s*"
+    r"(?:set|said|create|add|wake\s+me(?:\s+up)?)\s+(?:an?|in)?\s*alarm\s+(?:at|for)?\s*"
     r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?",
     re.I,
 )
 _ALARM_WORD = re.compile(
-    r"(?:set|create|add|wake\s+me(?:\s+up)?)\s+(?:an?\s+)?alarm\s+(?:at|for)?\s*"
+    r"(?:set|said|create|add|wake\s+me(?:\s+up)?)\s+(?:an?|in)?\s*alarm\s+(?:at|for)?\s*"
     r"(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"
     r"(?:\s+(thirty|forty five|quarter|half|fifteen|twenty|twenty five|forty|fifty|fifty five|oh|zero))?"
     r"\s*(am|pm)?",
     re.I,
 )
 
-# Note — broad set of verbs: write, jot, save, add, create, record, note
+# Note — broad set of verbs: write/right, jot, save, add, create, record, note
+# Also handles common Moonshine STT mishears ("right" for "write").
 _NOTE = re.compile(
-    # "add/write/save/jot/create/record a note: ..."
-    r"(?:add|take|save|make|create|write|jot|record|put\s+(?:a\s+)?note)\s+(?:a?\s*)?(?:note|reminder)?[:\s]+(.+)"
+    # "add/write/right/save/jot/create/record a note: ..."
+    r"(?:add|take|save|make|create|write|right|jot|record|put\s+(?:a\s+)?note)\s+(?:a?\s*)?(?:note|reminder)?[:\s]+(.+)"
     # "write/add/put in/to my notes: ..."
-    r"|(?:write|add|put|save)\s+(?:(?:this\s+)?(?:in|to|into|on)\s+)?(?:my\s+)?notes?[,:\s]+(.+)"
+    r"|(?:write|right|add|put|save)\s+(?:(?:this\s+)?(?:in|to|into|on)\s+)?(?:my\s+)?notes?[,:\s]+(.+)"
     # "note that/this ..."  "jot this down: ..."
     r"|(?:note|remember)\s+(?:this\s+)?(?:down\s+)?(?:that\s+)?(.+)",
     re.I,
@@ -105,8 +106,8 @@ _CREATE_TASK = re.compile(
     # "add/create/make a task: ..." or "add a to-do for ..."
     r"(?:add|create|make|set)\s+(?:a?\s*)?(?:new\s+)?(?:task|to-?do|todo|item|reminder)\s+"
     r"(?:for\s+|to\s+|called\s+|about\s+)?(?:to\s+)?(.+)"
-    # "remind me to ..."
-    r"|remind\s+me\s+to\s+(.+)"
+    # "remind me to ..." or "we mind me to"
+    r"|(?:remind|we\s+mind)\s+me\s+to\s+(.+)"
     # "do it for me, set a to-do ..."  — catch trailing task description
     r"|do\s+it\s+for\s+me[,\s]+(?:set|add|create)\s+(?:a?\s*)?(?:task|to-?do|todo)[:\s]+(.+)",
     re.I,
