@@ -14,11 +14,14 @@ function noteBg(color: string) {
   return COLORS.find((c) => c.v === color)?.bg ?? "#fef9c3";
 }
 
-export function NotesWidget() {
+const ML = (import.meta.env.VITE_ML_BASE_URL as string | undefined) ?? "http://127.0.0.1:8000";
+
+export function NotesWidget({ profileId = 0 }: { profileId?: number }) {
   const [title,   setTitle]   = useState("");
   const [content, setContent] = useState("");
   const [color,   setColor]   = useState("yellow");
   const [open,    setOpen]    = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const { data: notes, refetch } = trpc.notes.list.useQuery(undefined, { refetchInterval: 3000 });
   const create = trpc.notes.create.useMutation({
@@ -33,6 +36,39 @@ export function NotesWidget() {
     onSuccess: () => { refetch(); toast.success("Note deleted"); },
   });
   const pin = trpc.notes.update.useMutation({ onSuccess: () => refetch() });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("profile_id", profileId.toString());
+    formData.append("title", title);
+    formData.append("color", color);
+
+    setUploading(true);
+    try {
+      const res = await fetch(`${ML}/notes/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.detail || "Upload failed");
+      } else {
+        toast.success("File uploaded & indexed!");
+        refetch();
+        setOpen(false);
+        setTitle(""); setContent("");
+      }
+    } catch (e) {
+      toast.error("Network error during upload.");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
 
   return (
     <div className="rounded-2xl bg-card border shadow-sm p-5 flex flex-col gap-3">
@@ -75,14 +111,20 @@ export function NotesWidget() {
               />
             ))}
           </div>
-          <button
-            onClick={() => create.mutate({ title: title || "Untitled", content, color })}
-            disabled={create.isPending}
-            style={{ color: "#ffffff" }}
-            className="rounded-lg bg-primary !text-white py-1.5 text-sm font-medium disabled:opacity-50"
-          >
-            Save Note
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => create.mutate({ title: title || "Untitled", content, color })}
+              disabled={create.isPending || uploading}
+              style={{ color: "#ffffff" }}
+              className="rounded-lg bg-primary !text-white py-1.5 px-3 text-sm font-medium disabled:opacity-50"
+            >
+              Save Text
+            </button>
+            <label className="rounded-lg bg-secondary text-secondary-foreground py-1.5 px-3 text-sm font-medium cursor-pointer border hover:bg-secondary/80">
+              {uploading ? "Uploading..." : "Upload PDF/Image"}
+              <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.txt" onChange={handleFileUpload} disabled={uploading} />
+            </label>
+          </div>
         </div>
       )}
 

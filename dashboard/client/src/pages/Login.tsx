@@ -3,7 +3,7 @@ import { useState } from "react";
 import { GraduationCap, UsersRound } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
-type Role = "student" | "parent";
+type Role = "student" | "parent" | "admin";
 type Mode = "signin" | "signup";
 
 export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
@@ -18,6 +18,15 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const login = trpc.profile.login.useMutation({
     onSuccess: () => onLoggedIn(),
     onError: (err) => setError(err.message || "Could not sign in. Please try again."),
+  });
+
+  const adminLogin = trpc.profile.adminLogin.useMutation({
+    onSuccess: () => onLoggedIn(),
+    onError: (err) => setError(err.message || "Admin login failed."),
+  });
+
+  const allProfiles = trpc.profile.listAll.useQuery(undefined, {
+    enabled: role === "admin",
   });
 
   const submit = (event: React.FormEvent) => {
@@ -77,10 +86,41 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
             >
               <UsersRound size={15} /> Parent
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={role === "admin"}
+              className={role === "admin" ? "role-tab role-tab--active" : "role-tab"}
+              onClick={() => setRole("admin")}
+            >
+              Admin
+            </button>
           </div>
 
-          <label className="login-field">
-            <span>Your name</span>
+          {role === "admin" ? (
+            <div className="flex flex-col gap-2 mt-4 max-h-60 overflow-y-auto">
+              <p className="text-sm text-muted-foreground mb-2">Select a profile to impersonate:</p>
+              {allProfiles.isLoading ? (
+                <p className="text-sm">Loading profiles...</p>
+              ) : (
+                allProfiles.data?.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => adminLogin.mutate({ profileId: p.id })}
+                    className="flex justify-between items-center p-3 border rounded-lg hover:bg-muted text-left"
+                  >
+                    <span><strong>{p.name}</strong> <span className="text-xs text-muted-foreground">({p.role})</span></span>
+                    <span className="text-xs text-primary">Login &rarr;</span>
+                  </button>
+                ))
+              )}
+              {error && <div className="upload-status upload-status--error">{error}</div>}
+            </div>
+          ) : (
+            <>
+              <label className="login-field">
+                <span>Your name</span>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -152,6 +192,8 @@ export default function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
           </p>
           {mode === "signup" && role === "parent" && (
             <p className="login-hint">Your child types their PIN once to link your view to theirs.</p>
+          )}
+          </>
           )}
         </form>
       </div>

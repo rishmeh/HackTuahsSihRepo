@@ -10,7 +10,9 @@ import {
 } from "./profileAuth";
 import { publicProcedure, protectedProfileProcedure, router } from "./_core/trpc";
 import { accountKey, assertNotLocked, deviceKey, recordFailure, recordSuccess } from "./loginLimiter";
+import { profiles } from "../drizzle/schema";
 import type { ProfileRow } from "../drizzle/schema";
+import { getDb } from "./db";
 
 function sanitize(profile: ProfileRow) {
   const { pinHash: _pinHash, ...rest } = profile;
@@ -126,4 +128,25 @@ export const profileRouter = router({
     ctx.res.clearCookie(PROFILE_COOKIE_NAME, { ...getProfileCookieOptions(ctx.req), maxAge: -1 });
     return { success: true } as const;
   }),
+
+  listAll: publicProcedure.query(async () => {
+    const db = await getDb();
+    const rows = await db.select().from(profiles);
+    return rows.map(sanitize);
+  }),
+
+  adminLogin: publicProcedure
+    .input(z.object({ profileId: z.number().int() }))
+    .mutation(async ({ input, ctx }) => {
+      const profile = await getProfileById(input.profileId);
+      if (!profile) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Profile not found" });
+      }
+      const token = await signProfileSession(profile);
+      ctx.res.cookie(PROFILE_COOKIE_NAME, token, {
+        ...getProfileCookieOptions(ctx.req),
+        maxAge: SESSION_MAX_AGE_MS,
+      });
+      return sanitize(profile);
+    }),
 });
