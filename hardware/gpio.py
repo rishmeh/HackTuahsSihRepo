@@ -279,12 +279,14 @@ class ServoController:
             while self._ambient_active and not self._closed:
                 # When close to the target, pick a new random target
                 if abs(current_head - target_head) < 1.0 and abs(current_body - target_body) < 1.0:
-                    target_head = random.uniform(-20.0, 20.0)
-                    target_body = random.uniform(-10.0, 10.0)
+                    target_head = random.uniform(-35.0, 35.0)
+                    target_body = random.uniform(-15.0, 15.0)
+                    # BIGGER INTERVALS: sleep for a few seconds before starting the next move
+                    time.sleep(random.uniform(2.0, 5.0))
                     
-                # Smoothly interpolate towards the target
-                current_head += (target_head - current_head) * 0.05
-                current_body += (target_body - current_body) * 0.05
+                # Smoothly interpolate towards the target (slightly slower for drama)
+                current_head += (target_head - current_head) * 0.03
+                current_body += (target_body - current_body) * 0.03
                 
                 self._set_head(current_head)
                 self._set_body(current_body)
@@ -354,16 +356,21 @@ class ServoController:
 
     def thinking(self) -> None:
         """
-        Slow head tilt to one side + gentle body lean — the classic 'hmm'
-        pose.  Runs as a repeating sequence so it feels like the robot is
-        genuinely mulling things over.
+        Looks left or right and up, as if mulling things over.
         """
+        import random
+        side = random.choice([-25.0, 25.0]) # Look left or right
+        up = 15.0 # Look up
         self._gesture([
-            (-18.0,  6.0, 0.50),   # tilt left, lean
-            (-20.0,  8.0, 0.40),   # settle deeper
-            (-16.0,  5.0, 0.40),   # small shift
-            (-18.0,  7.0, 0.60),   # hold
+            (side, up, 0.50),
+            (side + random.uniform(-2, 2), up + 2.0, 0.40),
+            (side - random.uniform(-2, 2), up - 2.0, 0.40),
+            (side, up, 0.60),
         ])
+
+    def sleep(self) -> None:
+        """Keeps head down for sleeping."""
+        self._gesture([(0.0, -25.0, 1.0)])
 
     def focus(self) -> None:
         """

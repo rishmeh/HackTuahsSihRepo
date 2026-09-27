@@ -61,6 +61,30 @@ logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
+import threading
+
+_robot_state = {
+    "face_state": "idle",
+    "servo_state": "idle",
+    "overlay_text": None,
+    "overlay_duration": None,
+    "revision": 0
+}
+_robot_telemetry = {}
+_state_lock = threading.Lock()
+
+def _set_robot_state(face: str = None, servo: str = None):
+    with _state_lock:
+        if face: _robot_state["face_state"] = face
+        if servo: _robot_state["servo_state"] = servo
+        _robot_state["revision"] += 1
+
+import asyncio
+async def _auto_idle(delay: float = 8.0):
+    """Revert the robot state to idle after a delay so it can eventually sleep."""
+    await asyncio.sleep(delay)
+    _set_robot_state(face="idle", servo="idle")
+
 app = FastAPI(title="KidBot ML API", version="3.0.0")
 app.add_middleware(
     CORSMiddleware,
@@ -197,6 +221,7 @@ async def voice_text_command(body: dict):
             return {"transcription": text, "response": reply}
 
     # Layer 3: full LLM chat
+    _set_robot_state(face="thinking", servo="thinking")
     req = ChatRequest(
         query=text,
         student=StudentProfile(
@@ -207,6 +232,8 @@ async def voice_text_command(body: dict):
         student_id=profile_key,
     )
     chat_resp = await run_chat_pipeline(req)
+    _set_robot_state(face="happy", servo="speaking")
+    asyncio.create_task(_auto_idle())
     return {"transcription": text, "response": chat_resp.answer}
 
 
@@ -217,7 +244,11 @@ async def voice_text_command(body: dict):
 @app.post("/chat", response_model=ChatResponse, tags=["Chat"])
 async def chat(request: ChatRequest):
     logger.info("Chat | session=%s | age=%d", request.session_id, request.student.age)
-    return await run_chat_pipeline(request)
+    _set_robot_state(face="thinking", servo="thinking")
+    resp = await run_chat_pipeline(request)
+    _set_robot_state(face="happy", servo="speaking")
+    asyncio.create_task(_auto_idle())
+    return resp
 
 
 @app.get("/chat/history/{session_id}", tags=["Chat"])
@@ -256,17 +287,7 @@ async def flashcards(request: FlashcardRequest):
 # ---------------------------------------------------------------------------
 # Hardware Control API (for Pi peripheral daemon)
 # ---------------------------------------------------------------------------
-import threading
 
-_robot_state = {
-    "face_state": "idle",
-    "servo_state": "idle",
-    "overlay_text": None,
-    "overlay_duration": None,
-    "revision": 0
-}
-_robot_telemetry = {}
-_state_lock = threading.Lock()
 
 @app.get("/hardware/state")
 async def hardware_get_state() -> dict:

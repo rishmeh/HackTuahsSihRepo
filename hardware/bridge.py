@@ -114,6 +114,7 @@ class PeripheralDaemon:
         self._student_id: Optional[str] = None
         self._last_revision = -1
         self._poll_failures = 0
+        self._idle_seconds = 0.0
 
         # Ambient animation: start after this many consecutive no-face frames.
         # At FRAME_INTERVAL=0.15 s this is ~3 s of nobody in view.
@@ -217,7 +218,19 @@ class PeripheralDaemon:
                 response = self.http.get("/hardware/state", timeout=2.0)
                 if response.status_code == 200:
                     self._poll_failures = 0
-                    self._apply_command(response.json())
+                    command = response.json()
+                    
+                    # Auto-sleep if idle for more than 30 seconds
+                    is_idle = command.get("servo_state", "idle") == "idle" and command.get("face_state", "idle") == "idle"
+                    if is_idle:
+                        self._idle_seconds += POLL_INTERVAL
+                        if self._idle_seconds > 30.0:
+                            command["servo_state"] = "sleeping"
+                            command["face_state"] = "sleeping"
+                    else:
+                        self._idle_seconds = 0.0
+                        
+                    self._apply_command(command)
                 else:
                     logger.debug(
                         "Unexpected status from /hardware/state: %s",
@@ -287,7 +300,7 @@ class PeripheralDaemon:
             "happy":     self.servos.happy,
             "thinking":  self.servos.thinking,
             "focus":     self.servos.focus,
-            "sleeping":  self.servos.idle,
+            "sleeping":  self.servos.sleep,
         }
         action = actions.get(servo_state)
         if action is None:
