@@ -210,6 +210,7 @@ class Display:
 
         if state == "sleeping":
             eyes_closed = True
+            self._draw_sleeping_zs()
 
         self._draw_eyes(EYE_Y, EYE_SPACING, EYE_WIDTH, EYE_HEIGHT, eyes_closed, state)
         self._draw_mouth(CENTER_X, MOUTH_Y, state)
@@ -266,6 +267,37 @@ class Display:
         else:
             pygame.draw.arc(self.screen, WHITE,
                 (x - 25, y - 8, 50, 25), 3.9, 6.0, 3)
+
+    def _draw_sleeping_zs(self):
+        assert self.screen is not None and self.font is not None
+        # A full cycle is ~3 seconds
+        cycle = self._animation_time % 3.0
+        
+        # 3 Zs, staggered
+        for i in range(3):
+            # Phase is from 0.0 to 3.0 for each Z
+            phase = (cycle + i) % 3.0
+            
+            # Float up and to the right from the mouth area
+            x = CENTER_X + 30 + (phase * 30)
+            y = MOUTH_Y - 10 - (phase * 50)
+            
+            # Fade in quickly, fade out slowly
+            alpha = 255
+            if phase < 0.5:
+                alpha = int((phase / 0.5) * 255)
+            elif phase > 2.0:
+                alpha = int(((3.0 - phase) / 1.0) * 255)
+                
+            surf = self.font.render("Z", True, BLUE)
+            surf.set_alpha(alpha)
+            
+            # Scale up as it rises
+            scale = 0.5 + (phase * 0.3)
+            new_size = (int(surf.get_width() * scale), int(surf.get_height() * scale))
+            surf = pygame.transform.scale(surf, new_size)
+            
+            self.screen.blit(surf, (x, y))
 
     def _draw_eyebrows(self, state):
         assert self.screen is not None
