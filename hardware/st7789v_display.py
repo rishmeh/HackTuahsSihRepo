@@ -220,6 +220,10 @@ class ST7789VDisplay:
         self._draw_sprite(draw, mouth, (LANDSCAPE_WIDTH - max(map(len, mouth))) // 2, 18)
         if state == "thinking":
             self._draw_sprite(draw, ["#" * ((frame % 3) + 1)], 32, 6)
+        elif state == "sleeping":
+            z_step = (frame // 2) % 4
+            if z_step > 0:
+                self._draw_sprite(draw, ["##", " #", "# ", "##"], 28 + z_step, 14 - z_step * 2)
         # Preserve the proven portrait controller/window setup and rotate only
         # the composition, producing a horizontal face layout on the mounted TFT.
         return canvas.resize((HEIGHT, WIDTH), Image.Resampling.NEAREST).transpose(Image.Transpose.ROTATE_90)

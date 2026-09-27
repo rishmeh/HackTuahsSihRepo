@@ -110,6 +110,8 @@ def test_hdmi(fullscreen: bool):
                     display.show_text("Yay! That's great!", duration=2.0)
                 elif state == "thinking":
                     display.show_text("Hmm, let me think...", duration=2.0)
+                elif state == "sleeping":
+                    display.show_text("Zzz...", duration=2.0)
                 time.sleep(3.0)
     except KeyboardInterrupt:
         print("\nTest stopped.")
