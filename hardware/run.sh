@@ -2,7 +2,7 @@
 set -uo pipefail
 
 echo "============================================"
-echo "  Table Tot — Pi Camera/Display/Servo Bridge"
+echo "  Table Tot — Pi Display/Servo Bridge"
 echo "============================================"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -32,9 +32,8 @@ DISPLAY_DRIVER="${DISPLAY_DRIVER:-st7789v}"
 export DISPLAY_DRIVER
 
 echo "Brain (laptop):  $LAPTOP_URL"
-echo "Camera type:     ${CAMERA_TYPE:-usb}"
 echo "Display driver:  $DISPLAY_DRIVER"
-echo "Starting camera upload, face display and servo command polling..."
+echo "Starting face display and servo command polling..."
 echo ""
 
 cd "$SCRIPT_DIR"
