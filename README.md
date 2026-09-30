@@ -1,356 +1,177 @@
-# Table Tot — AI-Powered Desk Companion Robot
+<div align="center">
 
-> **Smart India Hackathon 2026** | Problem Statement: SIH26224 — Student Innovation  
-> **Theme:** Smart Education | **Category:** Hardware | **Team:** HackTuah
+# Table Tot
 
-Startup instructions: [START_ROBOT.md](START_ROBOT.md)
+**A study buddy that sits on the desk, not in a tab.**
+A small robot with a face and two servos that answers doubts out loud, turns any topic into a quiz or flashcards, and keeps the study session on track.
+Everything runs on the family laptop. No internet needed.
 
-Wiring and power: [hardware/CONNECTIONS.md](hardware/CONNECTIONS.md)
+Smart India Hackathon 2026 · PS SIH26224 · Smart Education · Hardware · Team HackTuah
 
-![Smart India Hackathon 2026](https://sih.gov.in/)
+<a href="https://drive.google.com/file/d/1g4RysGRt5eFyuDaAKFRs-mw6mppIXEU0/view?usp=drivesdk"><img src="docs/screenshots/demo-thumbnail.jpg" alt="Watch the Table Tot demo video" width="820"></a>
 
----
+**[▶ Watch the demo video](https://drive.google.com/file/d/1g4RysGRt5eFyuDaAKFRs-mw6mppIXEU0/view?usp=drivesdk)** (2 min 49 s)
 
-## Overview
-
-**Table Tot** is an AI-powered desk companion robot that lives on a student's study desk. It learns the student's routine and study patterns, then builds personalised productivity workflows around them. A laptop runs every model and application service and uses its own microphone and speakers. A Raspberry Pi 5 inside the robot handles the camera, animated-face display and two servos.
-
----
-
-## Problem Statement
-
-Students today face three unresolved challenges:
-
-| Challenge | How Table Tot Addresses It |
-|---|---|
-| **No structured self-study guidance** | Builds and enforces a personal study rhythm: timers, revision scheduling and reminders |
-| **Study apps are easy to ignore** | A physical companion with voice, gestures and expressions creates engagement and accountability |
-| **Parents have no visibility** | A local web dashboard shows study insights without intrusive surveillance |
+</div>
 
 ---
 
-## Innovation & Uniqueness
+## What is in this repository
 
-### Offline-First by Design
-A small language model on the laptop answers questions and builds quizzes offline, and decides when a cloud LLM is really needed. The Pi and laptop only need a local wired or Wi-Fi network; internet access is optional.
+Table Tot has three parts, and all three live here.
 
-### Age and Psychology Adaptive
-Difficulty, prompts, tone and personality adjust to the student's developmental stage and observed study patterns. A 9-year-old gets playful story prompts; a Class 12 student gets exam-style drills.
-
-### Multi-Modal Interaction
-Voice through the laptop, camera-based gesture control and face recognition give a hands-free way to study. Raise a palm to pause the timer; the camera recognizes when the student sits down.
-
-### Dynamic Personality
-Friend, teacher or detective personas, plus an expressive animated face, keep engagement fresh across age groups. Detective mode turns a history chapter into clues to solve.
-
----
-
-## Key Features
-
-### Study Tools
-- Pomodoro and normal timers, alarms
-- To-do list and calendar
-- AI tutor: on-device SLM + cloud
-- Quizzes and flashcards, offline
-- Notes with OCR from books and handwriting
-- Daily news and general knowledge feed
-
-### Smart Interaction
-- Voice input and spoken replies
-- Face recognition from the Pi camera
-- Gesture control for hands-free use
-- Laptop dashboard and robot-status display
-- Servo-driven head and body movement
-- Student persona and pattern tracking
-
-### Wellness and Safety
-- Hydration, posture and break reminders
-- Fatigue cues from camera and usage
-- Child-safe content filtering
-- All personal data stays on-device
-- No cloud storage of face or voice
-- Cloud queries anonymised first
-
-### Parent Dashboard
-- KPI tracking: focus time, streaks, quiz scores
-- Study insights and weekly summaries
-- Controls over bot behaviour and limits
-- Upload notes, syllabus and homework
-- Any browser on the home WiFi, no app install
-
----
-
-## A Study Session with Table Tot
-
-1. **Student sits down** — Pi camera frames reach the laptop, the face is recognised and the persona loads
-2. **Plan the session** — Today's to-dos, syllabus and due homework
-3. **Focus block** — Pomodoro timer, posture and hydration nudges
-4. **Active recall break** — Voice quiz from the student's own notes
-5. **Wrap up** — Revision scheduled, KPIs logged to dashboard
-
----
-
-## Content Intelligence
-
-- Syllabus ingestion and automatic study planner
-- Last-minute revision notes generation
-- Spaced-repetition revision scheduling
-- Homework upload and tracking
-- Curated open-source videos and articles
-
-## Engagement and Learning Modes
-
-- Robot personalities: friend, teacher, detective
-- Story-based and game-based learning
-- Competitive mode and group learning
-- Public speaking and language practice
-- Concept animations generated with Manim
-
----
-
-## Connectivity Model: Self-Sufficient Offline, Smarter Online
-
-### Offline Mode — Always Available
-
-| Capability |
-|---|
-| Timers, alarms, calendar, to-do |
-| On-device SLM: Q&A and quizzes |
-| Moonshine STT and Piper TTS on the laptop |
-| Face detection (YuNet) |
-| Wellness reminders |
-| Scheduling, persona, KPIs |
-
-**Storage:** SQLite plus a quantised SLM; scheduling and persona data stay local.
-
-### Online Mode — When WiFi is Available
-
-| Capability |
-|---|
-| Cloud LLM for hard questions |
-| New flashcards and quizzes |
-| Daily news and GK feed |
-| Whisper STT, ElevenLabs TTS |
-| Module download and updates |
-| Syllabus and content ingestion |
-
-**Escalation:** Queries are anonymised before sending; no personal data is pushed. The router decides when to switch.
-
----
-
-## Technical Approach
-
-### Hardware
-
-| Component | Role |
-|---|---|
-| Laptop | All AI, application, database and dashboard computation |
-| Raspberry Pi 5 (4 GB) | Camera, face-display and servo bridge |
-| 2 × Servos | Head and body movement |
-| Camera module | Face, gesture, OCR |
-| Laptop microphone + speakers | Voice input and spoken replies |
-| HDMI IPS display | Animated robot face, driven by the Pi |
-| Laptop screen | Parent dashboard and diagnostics |
-
-> Pi, servos and camera are already in hand. BOM stays affordable.
-
-### Software Stack
-
-| Layer | Technology |
-|---|---|
-| Language | Python |
-| Backend | FastAPI on the laptop; HTTP bridge to the Pi |
-| Database | SQLite — offline-first, zero-setup local DB |
-| Vision | OpenCV |
-| Offline Speech | Moonshine (STT) + Piper (TTS), both on the laptop |
-| Dashboard | React + Vite — parent dashboard over WiFi |
-| Local SLM | Qwen through Ollama on the laptop |
-| Ingestion | pdfplumber, Tesseract, FFmpeg, Whisper |
-
-### Voice Pipeline: Laptop SLM First, Cloud LLM Only When Needed
-
-```
-Wake word detection (openWakeWord)
-    ↓
-Speech-to-text: Moonshine (offline) / Whisper (online)
-    ↓
-Intent router
-    ↓
-SLM on laptop → cloud LLM if needed
-    ↓
-Text-to-speech: Piper on the laptop
-    ↓
-Laptop speaker + Pi servo command
-```
-
-### Laptop Models
-
-| Model | Purpose |
-|---|---|
-| Piper | TTS |
-| Moonshine | STT |
-| openWakeWord | Wake word detection |
-| Silero VAD | Voice activity detection |
-| YuNet | Face detection |
-| SFace | Face recognition |
-| MobileGaze | Gaze estimation |
-| Tesseract / PaddleOCR | OCR |
-| Qwen local SLM | Image + text Q&A |
-| all-MiniLM-L6-v2 | Embeddings and search |
-
----
-
-## System Architecture
-
-```
-ROBOT / RASPBERRY PI 5                  LAPTOP
-────────────────────────────────────────────────────────────────────
-Camera ──JPEG over HTTP───────────────▶ YuNet + SFace recognition
-
-Servos ◀──versioned JSON state───────── Robot state machine
-Display ◀──versioned face state──────── FastAPI application services
-                                        Laptop microphone + Moonshine
-                                        Piper + laptop speakers
-                                        Ollama SLM, SQLite, dashboard
-────────────────────────────────────────────────────────────────────
-             trusted LAN, laptop TCP port 8000
-```
-
-- Personal records, models and audio stay on the laptop. The Pi retains no face image and renders the animated face locally from state names.
-- The dashboard and Pi use the laptop FastAPI service on the local network.
-- Camera transfer and servo return commands are documented in `hardware/DATA_FLOW.md`.
-- The query scrubber is the only path to an optional cloud model.
-
----
-
-## Feasibility and Viability
-
-### Why It Is Feasible
-
-- **Affordable:** Total bill of materials per unit is low; all parts are off-the-shelf and commercially available.
-- **Parts in hand:** Pi, camera and servos already available.
-- **Fully open-source stack:** Python, FastAPI, OpenCV, Moonshine, Piper, Ollama and React.
-- **Huge Pi community:** Documented drivers for every peripheral used.
-- **Works without internet:** The laptop SLM answers everyday questions offline while the Pi and laptop communicate over the LAN.
-- **Own it forever:** The local SLM is a one-time cost, while cloud API bills compound over time.
-
-| Metric | Value |
-|---|---|
-| Recurring AI cost offline | **Rs 0/mo** |
-| Personal records in cloud | **0** |
-
-### Potential Challenges and Risks
-
-| Challenge | Strategy |
-|---|---|
-| **Laptop availability** — the robot depends on its paired laptop | Reserve stable LAN addresses and start the laptop service before a study session |
-| **Voice latency offline** — Local STT / TTS is slower than cloud | Wake-word gating: listen for the wake word only, then stream short utterances; pre-cache common replies |
-| **Child data privacy** — Face, voice and study patterns are sensitive | Keep records and models on the laptop, discard Pi capture buffers, and anonymise optional cloud queries |
-| **Servo power noise** — servo current spikes can reset the Pi | Separate regulated servo supply, common ground and bulk capacitance near the servos |
-
----
-
-## Impact and Benefits
-
-### Target Audience
-
-- **Primary:** K-12 and college students who self-study at home
-- **Secondary:** Parents, teachers, coaching centres and libraries
-
-### Educational
-
-| Outcome |
-|---|
-| Dedicated, distraction-free study companion replaces passive screen time |
-| Spaced repetition and revision scheduling improve long-term retention |
-| Active-recall quizzes built from the student's own notes |
-| Adaptive difficulty keeps every age group engaged |
-
-> **Impact:** Higher retention, less last-minute cramming
-
-### Social
-
-| Outcome |
-|---|
-| Bridges the parent-student gap with insight, not surveillance |
-| Physical, expressive companion supports students who study alone |
-| Group and competitive modes encourage peer learning |
-| Laptop microphone supports hands-free study interaction |
-
-> **Impact:** Trust between parents and students
-
-### Economic
-
-| Outcome |
-|---|
-| Low bill of materials makes it affordable for middle-income Indian homes |
-| Offline-first design serves areas with poor connectivity |
-| Scales to schools, libraries and government learning centres with minimal infrastructure |
-| Replaces paid apps and subscriptions; no recurring AI bill |
-
-> **Impact:** Affordable and deployable at scale
-
-### Wellness
-
-| Outcome |
-|---|
-| Hydration, posture and break reminders reduce strain during long sessions |
-| Fatigue cues trigger a break or a lighter activity |
-| Personas and story mode make studying feel less like a chore |
-| No doom-scrolling: the companion has no social feed |
-
-> **Impact:** Healthier, sustainable study habits
-
----
-
-## Research and References
-
-### Learning Science
-
-- **Pomodoro Technique.** Cirillo, F. (2006). *The Pomodoro Technique.* [pomodorotechnique.com](https://pomodorotechnique.com)
-- **Spacing and retention.** Cepeda et al. (2006). Distributed practice in verbal recall tasks. *Psychological Bulletin.* [doi.org/10.1037/0033-2909.132.3.354](https://doi.org/10.1037/0033-2909.132.3.354)
-- **Active recall.** Roediger and Karpicke (2006). Test-enhanced learning. *Psychological Science.* [doi.org/10.1111/j.1467-9280.2006.01693.x](https://doi.org/10.1111/j.1467-9280.2006.01693.x)
-- **Forgetting curve.** Ebbinghaus, H. (1885). *Memory: A contribution to experimental psychology.* [psychclassics.yorku.ca](https://psychclassics.yorku.ca/Ebbinghaus/index.htm)
-- **Policy.** National Education Policy 2020, Ministry of Education, Govt. of India. [static.pib.gov.in](https://static.pib.gov.in/WriteReadData/userfiles/NEP_Final_English_0.pdf)
-
-### Technology
-
-- **Qwen3.** Alibaba. Open-weight small language models for on-device use. [github.com/QwenLM/Qwen3](https://github.com/QwenLM/Qwen3)
-- **llama.cpp.** Quantised LLM inference in C/C++ on CPU. [github.com/ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
-- **Moonshine.** Useful Sensors. Real-time on-device speech recognition. [github.com/usefulsensors/moonshine](https://github.com/usefulsensors/moonshine)
-- **OpenCV Zoo.** YuNet face detection and SFace face recognition. [github.com/opencv/opencv_zoo](https://github.com/opencv/opencv_zoo)
-- **piper-tts.** Rhasspy. Local neural TTS used on the laptop. [github.com/rhasspy/piper](https://github.com/rhasspy/piper)
-- **Raspberry Pi docs.** Camera, GPIO and PWM servo control. [raspberrypi.com/documentation](https://raspberrypi.com/documentation)
-
-### Comparable Products
-
-| Product | Limitation | Table Tot Differentiator |
+| Part | What it does | Where |
 |---|---|---|
-| **Miko** (India) | Companion robot for kids; cloud-dependent, no study workflow or OCR | Offline-first AI, study-specific workflows, OCR, parent dashboard |
-| **Amazon Echo Show Kids** | Voice-first, no physical expressiveness or study tracking | Physical robot with animated face, gestures, study tracking |
-| **Wonder Workshop Cue** | Coding-focused robot, not a study companion | Purpose-built study companion with AI tutor and revision scheduling |
-| **Emo / Loona desk robots** | Emotive desk pets with no study workflow, OCR or parent view | Study workflows, OCR, parent dashboard, on-device privacy |
+| Robot | Raspberry Pi 5 with an ST7789V face display and two servos (head and body). It asks the laptop what to show and plays the face and gestures. | [`hardware/`](hardware), [`pi_server/`](pi_server) |
+| Laptop brain | FastAPI on port 8000 and a voice agent using the laptop's mic and speakers: wake word, speech to text, text to speech, a local SLM through Ollama, notes, quizzes, flashcards, alarms and robot state | [`ml/`](ml), [`learner/`](learner), [`persona/`](persona) |
+| Dashboard | React + Vite web app on port 3000, for the student's desk and the parent view | [`dashboard/`](dashboard) |
 
----
+## Why
 
-## Repository Structure
+- **Self-study has no structure.** Nobody sets the timer, plans the revision or checks that the chapter actually went in. Table Tot does, every session.
+- **Study apps are easy to ignore.** A notification is swiped away. A robot that looks up, thinks and answers when you call it is harder to ignore.
+- **Parents can't see progress.** They either hover or guess. The parent view shows focus time, streaks and quiz scores, and nothing more.
+
+## How it fits together
+
+```mermaid
+flowchart LR
+    subgraph robot["Robot · Raspberry Pi 5"]
+        direction TB
+        face["Face display<br/>ST7789V"]
+        servo["2 servos<br/>head and body"]
+    end
+
+    subgraph laptop["Laptop (offline)"]
+        direction TB
+        voice["Voice agent<br/>mic · Hey Jarvis · Moonshine · Piper"]
+        api["FastAPI · :8000<br/>chat · notes · quizzes<br/>alarms · robot state"]
+        slm["Local SLM<br/>Qwen on Ollama"]
+        dash["Dashboard server · :3000<br/>tRPC + SQLite"]
+        voice --> api
+        api --- slm
+        api <--> dash
+    end
+
+    browser["Browser on home WiFi<br/>student desk · parent view"]
+
+    robot <-- "polls face and servo state<br/>every 250 ms" --> api
+    dash <--> browser
+```
+
+The Pi does no thinking. Four times a second it asks the laptop which face to show and which gesture to play. The browser talks to the dashboard server, and straight to FastAPI for voice, notes uploads and live alarm events. Speech, answers, notes and study records all stay on the laptop. Hard questions don't go to the cloud: the same local model answers again with more time to think.
+
+## A study session, end to end
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor S as Student
+    participant R as Robot
+    participant L as Laptop
+    participant D as Dashboard
+
+    S->>D: Signs in, starts a 25-minute focus block
+    S->>L: "Hey Jarvis"
+    L-->>R: Listening face, head tilts
+    S->>L: "What is photosynthesis?"
+    L-->>R: Thinking face, looks up
+    L->>L: Speech to text, answer from the local SLM
+    L-->>S: Spoken answer
+    L-->>R: Speaking face
+    S->>L: "Make flashcards on the solar system"
+    L-->>D: New deck appears on the desk
+    S->>D: Takes the quiz, finishes the block
+    D-->>D: Focus time, streak and quiz score saved for the parent view
+    R->>R: 30 s with nothing to do, falls asleep
+```
+
+## The robot
+
+<table>
+<tr>
+<td width="45%"><img src="docs/screenshots/robot.jpg" alt="The Table Tot robot: face display on a two-servo pan-tilt mount, wired to a Raspberry Pi 5"></td>
+<td>
+
+- **Face.** A small ST7789V IPS display (240 × 320) shows the robot's moods: idle, happy, listening, thinking, speaking, focus and sleeping. After 30 seconds of nothing, it dozes off with floating Zs.
+- **Head and body.** Two servos on a pan-tilt mount tilt to listen, look up to think, bob while speaking and sway gently when idle.
+- **Brain.** A Raspberry Pi 5 drives the parts and polls the laptop for what to do. The laptop's mic and speakers carry the voice.
+
+Wiring is in [`hardware/CONNECTIONS.md`](hardware/CONNECTIONS.md).
+
+</td>
+</tr>
+</table>
+
+## The dashboard
+
+| | |
+|---|---|
+| **Student desk.** A focus timer, today's task list and small nudges to drink water and put the phone away. Widgets below for the clock, weather, alarms, notes (type them or upload a PDF or photo) and the voice assistant.<br/><br/>![Student desk](docs/screenshots/desk.jpg) | **Parent view.** What the child is doing right now, the week's tasks, focus time, quiz average and streak, and healthy limits: a daily study cap and quiet hours. A parent needs the child's PIN to link.<br/><br/>![Parent view](docs/screenshots/parent-view.jpg) |
+| **Onboarding.** An 11-step story instead of a form. Each choice feeds the learner profile that sets Tot's tone, hints, answer length and teaching style.<br/><br/>![Onboarding](docs/screenshots/onboarding.jpg) | **Flashcards and quizzes by voice.** Say "make flashcards on the solar system" or "quiz me on fractions" and the local SLM builds the deck or quiz. Scores from the dashboard go to the parent view.<br/><br/>![Flashcards](docs/screenshots/flashcards.jpg) |
+
+## Things to say
+
+The wake word is **"Hey Jarvis"**.
+
+| Say | What happens |
+|---|---|
+| "What is photosynthesis?" | Spoken answer from the local SLM |
+| "Make a quiz on the solar system" | A new quiz on the desk |
+| "Make flashcards on fractions" | A new flashcard deck |
+| "Take a quiz on geography" | A spoken quiz, answered out loud |
+| "Set a timer for ten minutes" | Starts a timer |
+| "Set an alarm for 7 am" | Adds an alarm |
+| "Note that the test is on Friday" | Saves a note |
+| "Remind me to buy milk" | Adds a task |
+| "What's the weather in Chennai?" | Current weather |
+| "Help me set up my persona" | Ten quick questions that tune how Tot talks |
+
+## Running it
+
+Full setup is in [`RUNNING.md`](RUNNING.md). The short version, on the laptop (Git Bash on Windows):
+
+```bash
+# once
+pip install -e ".[api,test]"
+pip install -r ml/requirements.txt
+ollama pull qwen3:0.6b
+cp ml/.env.example ml/.env
+cd dashboard && pnpm install && cd ..
+
+# every time
+bash run.sh                   # FastAPI and the voice agent, http://localhost:8000
+cd dashboard && pnpm dev      # dashboard, http://localhost:3000
+```
+
+On the Pi, run `bash hardware/run.sh`. To have the Pi ring for alarms and timers too, also run `python3 pi_server/app.py` and set `PI_HOST` in `ml/.env`. Power-on order is in [`START_ROBOT.md`](START_ROBOT.md), and wiring is in [`hardware/CONNECTIONS.md`](hardware/CONNECTIONS.md).
+
+## Privacy
+
+- There is no camera. Voice is turned into text on the laptop and the audio is not kept.
+- Answers come from a model on the laptop. Nothing is sent to a cloud AI.
+- Anything typed into chat has names, phone numbers, emails and addresses scrubbed before the model sees it.
+- The dashboard only runs on the home network. PINs are hashed, repeated wrong guesses lock the account, and a parent needs the child's PIN to link.
+- The only internet call is the optional weather widget.
+
+## Layout
 
 ```
-HackTuahsSihRepo/
-├── dashboard/      # React/Vite dashboard and local Node server
-├── hardware/       # Raspberry Pi capture and actuator bridge
-├── learner/        # onboarding profile and policy
-├── ml/             # laptop FastAPI, chat, quiz, voice and TTS
-├── persona/        # response personality
-├── vision/         # laptop face detection and recognition
-└── SIH2026-Presentation-HackTuah-TableTot.pptx
+dashboard/        React + Vite app and its Node server (tRPC, SQLite)
+hardware/         Pi face display and servo bridge, wiring docs
+pi_server/        optional Pi service that rings for alarms and timers
+ml/               laptop FastAPI and voice agent: chat, notes, quizzes, flashcards, alarms, robot state
+learner/          onboarding questionnaire, learner profile and teaching policy
+persona/          Tot's phrases, persona prompt and voice settings
+docs/screenshots/ the images in this README
 ```
 
----
+## Built with
 
-## Acknowledgements
+Python, FastAPI, Ollama with Qwen, openWakeWord, Moonshine, Piper, PyMuPDF, SQLite with FTS5, React, Vite, TypeScript, tRPC and Tailwind CSS, on a Raspberry Pi 5.
 
-- **Team:** HackTuah
-- **Event:** Smart India Hackathon 2026
-- **Problem Statement:** SIH26224 — Student Innovation
-- **Theme:** Smart Education | **Category:** Hardware
+## Credits
+
+Team HackTuah, for Smart India Hackathon 2026. The pitch deck is [`SIH2026-Presentation-HackTuah-TableTot.pptx`](SIH2026-Presentation-HackTuah-TableTot.pptx).
+
+The onboarding photos are CC0 and public-domain images. Sources are in [`dashboard/client/public/onboarding/ATTRIBUTION.md`](dashboard/client/public/onboarding/ATTRIBUTION.md).
