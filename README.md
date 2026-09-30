@@ -10,7 +10,7 @@ Smart India Hackathon 2026 · PS SIH26224 · Smart Education · Hardware · Team
 
 <a href="https://drive.google.com/file/d/1g4RysGRt5eFyuDaAKFRs-mw6mppIXEU0/view?usp=drivesdk"><img src="docs/screenshots/demo-thumbnail.jpg" alt="Watch the Table Tot demo video" width="820"></a>
 
-**[▶ Watch the demo video](https://drive.google.com/file/d/1g4RysGRt5eFyuDaAKFRs-mw6mppIXEU0/view?usp=drivesdk)** (2 min 49 s)
+**[▶ Watch the demo video](https://drive.google.com/file/d/1g4RysGRt5eFyuDaAKFRs-mw6mppIXEU0/view?usp=drivesdk)** (2 min 49 s) · **[Pitch deck](https://docs.google.com/presentation/d/1UuR3PBAGwim2hcJXAsRA2YukOUMFK2f5/edit?usp=sharing&ouid=100875344168070587847&rtpof=true&sd=true)**
 
 </div>
 
@@ -172,6 +172,6 @@ Python, FastAPI, Ollama with Qwen, openWakeWord, Moonshine, Piper, PyMuPDF, SQLi
 
 ## Credits
 
-Team HackTuah, for Smart India Hackathon 2026. The pitch deck is [`SIH2026-Presentation-HackTuah-TableTot.pptx`](SIH2026-Presentation-HackTuah-TableTot.pptx).
+Team HackTuah, for Smart India Hackathon 2026. The pitch deck is on [Google Slides](https://docs.google.com/presentation/d/1UuR3PBAGwim2hcJXAsRA2YukOUMFK2f5/edit?usp=sharing&ouid=100875344168070587847&rtpof=true&sd=true), and a copy is in [`SIH2026-Presentation-HackTuah-TableTot.pptx`](SIH2026-Presentation-HackTuah-TableTot.pptx).
 
 The onboarding photos are CC0 and public-domain images. Sources are in [`dashboard/client/public/onboarding/ATTRIBUTION.md`](dashboard/client/public/onboarding/ATTRIBUTION.md).
